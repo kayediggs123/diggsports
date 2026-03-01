@@ -22,6 +22,8 @@ const COLORS = [
   "#8338EC", "#FF006E", "#3A86FF", "#FB5607", "#FFBE0B",
 ];
 
+const SAVE_KEY = "mm-auction-draft-save";
+
 const buildDefaultSeedNames = () => {
   const names = {};
   REGIONS.forEach((r) => {
@@ -37,9 +39,7 @@ const buildItems = (seedNames) => {
     for (let s = 1; s <= 12; s++) {
       const name = seedNames[`${region}-${s}`]?.trim();
       list.push({
-        id: `${region}-${s}`,
-        seed: s,
-        region,
+        id: `${region}-${s}`, seed: s, region,
         label: name ? `#${s} ${name}` : `#${s} Seed`,
         shortLabel: name || `#${s}`,
         type: "single",
@@ -47,9 +47,7 @@ const buildItems = (seedNames) => {
     }
     const groupName = seedNames[`${region}-13-16`]?.trim();
     list.push({
-      id: `${region}-13-16`,
-      seed: "13-16",
-      region,
+      id: `${region}-13-16`, seed: "13-16", region,
       label: groupName ? `13-16 ${groupName}` : "13-16 Seeds",
       shortLabel: groupName || "13-16",
       type: "group",
@@ -67,6 +65,39 @@ function shuffle(arr) {
   return a;
 }
 
+// ── Save / Load helpers ──
+const saveDraft = (state) => {
+  try {
+    // Replace Infinity with null for JSON
+    const toSave = {
+      ...state,
+      drafters: state.drafters.map((d) => ({
+        ...d,
+        budget: d.budget === Infinity ? null : d.budget,
+      })),
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(toSave));
+  } catch (e) { /* silent */ }
+};
+
+const loadDraft = () => {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    // Restore Infinity
+    data.drafters = data.drafters.map((d) => ({
+      ...d,
+      budget: d.budget === null ? Infinity : d.budget,
+    }));
+    return data;
+  } catch (e) { return null; }
+};
+
+const clearSave = () => {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* silent */ }
+};
+
 export default function MarchMadnessAuction() {
   const [phase, setPhase] = useState("setup");
   const [drafterNames, setDrafterNames] = useState(["", "", ""]);
@@ -83,13 +114,59 @@ export default function MarchMadnessAuction() {
   const [budgetMode, setBudgetMode] = useState("unlimited");
   const [budgetAmount, setBudgetAmount] = useState(200);
   const [setupSeedTab, setSetupSeedTab] = useState("East");
+  const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [copied, setCopied] = useState(false);
   const logRef = useRef(null);
+
+  // Check for saved draft on mount
+  useEffect(() => {
+    const saved = loadDraft();
+    if (saved && (saved.phase === "draft" || saved.phase === "done")) {
+      setHasSavedDraft(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log]);
 
   const hasBudget = budgetMode === "capped";
+
+  // ── Auto-save after state changes during draft ──
+  const doSave = (overrides = {}) => {
+    const state = {
+      phase: overrides.phase ?? phase,
+      drafters: overrides.drafters ?? drafters,
+      availableItems: overrides.availableItems ?? availableItems,
+      draftOrder: overrides.draftOrder ?? draftOrder,
+      draftIndex: overrides.draftIndex ?? draftIndex,
+      currentItem: overrides.currentItem ?? currentItem,
+      log: overrides.log ?? log,
+      budgetMode,
+      budgetAmount,
+    };
+    saveDraft(state);
+  };
+
+  const resumeDraft = () => {
+    const saved = loadDraft();
+    if (!saved) return;
+    setPhase(saved.phase);
+    setDrafters(saved.drafters);
+    setAvailableItems(saved.availableItems);
+    setDraftOrder(saved.draftOrder);
+    setDraftIndex(saved.draftIndex);
+    setCurrentItem(saved.currentItem);
+    setLog(saved.log);
+    setBudgetMode(saved.budgetMode);
+    setBudgetAmount(saved.budgetAmount);
+    if (saved.phase === "done") setShowConfetti(true);
+  };
+
+  const startFresh = () => {
+    clearSave();
+    setHasSavedDraft(false);
+  };
 
   const startDraft = () => {
     const names = drafterNames.filter((n) => n.trim());
@@ -100,29 +177,41 @@ export default function MarchMadnessAuction() {
     }));
     const builtItems = buildItems(seedNames);
     const shuffled = shuffle(builtItems);
+    const initLog = [
+      hasBudget
+        ? `🏀 Draft started! ${names.length} drafters · $${budgetAmount} budget · ${builtItems.length} items`
+        : `🏀 Draft started! ${names.length} drafters · No bid limits · ${builtItems.length} items`,
+      `📢 [${shuffled[0].region}] ${shuffled[0].label} is up! (1 of ${shuffled.length})`,
+    ];
     setDrafters(d);
     setAvailableItems(builtItems);
     setDraftOrder(shuffled);
     setDraftIndex(0);
     setCurrentItem(shuffled[0]);
     setPhase("draft");
-    setLog([
-      hasBudget
-        ? `🏀 Draft started! ${names.length} drafters · $${budgetAmount} budget · ${builtItems.length} items across 4 regions`
-        : `🏀 Draft started! ${names.length} drafters · No bid limits · ${builtItems.length} items across 4 regions`,
-      `📢 [${shuffled[0].region}] ${shuffled[0].label} is up for auction! (1 of ${shuffled.length})`,
-    ]);
+    setLog(initLog);
+    saveDraft({
+      phase: "draft", drafters: d, availableItems: builtItems,
+      draftOrder: shuffled, draftIndex: 0, currentItem: shuffled[0], log: initLog,
+      budgetMode, budgetAmount,
+    });
   };
 
   const addDrafter = () => { if (drafterNames.length < 15) setDrafterNames([...drafterNames, ""]); };
   const removeDrafter = (idx) => { if (drafterNames.length > 2) setDrafterNames(drafterNames.filter((_, i) => i !== idx)); };
 
-  const advanceToNext = (nextIndex, currentDraftOrder, updatedAvailable, logArr) => {
+  const advanceToNext = (nextIndex, currentDraftOrder, updatedAvailable, logArr, updatedDrafters) => {
     if (nextIndex >= currentDraftOrder.length) {
       setPhase("done");
       setShowConfetti(true);
       setCurrentItem(null);
-      setLog([...logArr, "🏆 ALL ITEMS DRAFTED! The auction is complete!"]);
+      const doneLog = [...logArr, "🏆 ALL ITEMS DRAFTED! The auction is complete!"];
+      setLog(doneLog);
+      saveDraft({
+        phase: "done", drafters: updatedDrafters, availableItems: updatedAvailable,
+        draftOrder: currentDraftOrder, draftIndex: nextIndex, currentItem: null, log: doneLog,
+        budgetMode, budgetAmount,
+      });
       return;
     }
     const next = currentDraftOrder[nextIndex];
@@ -130,7 +219,13 @@ export default function MarchMadnessAuction() {
     setDraftIndex(nextIndex);
     setSelectedWinner(null);
     setWinningBid("");
-    setLog([...logArr, `📢 [${next.region}] ${next.label} is up for auction! (${nextIndex + 1} of ${currentDraftOrder.length})`]);
+    const nextLog = [...logArr, `📢 [${next.region}] ${next.label} is up! (${nextIndex + 1} of ${currentDraftOrder.length})`];
+    setLog(nextLog);
+    saveDraft({
+      phase: "draft", drafters: updatedDrafters, availableItems: updatedAvailable,
+      draftOrder: currentDraftOrder, draftIndex: nextIndex, currentItem: next, log: nextLog,
+      budgetMode, budgetAmount,
+    });
   };
 
   const confirmSale = () => {
@@ -146,32 +241,71 @@ export default function MarchMadnessAuction() {
     const updatedAvailable = availableItems.filter((item) => item.id !== currentItem.id);
     setDrafters(updatedDrafters);
     setAvailableItems(updatedAvailable);
-
     const saleLog = [...log, `✅ [${currentItem.region}] ${currentItem.label} → ${winner.name} for $${amount}!`];
     setLog(saleLog);
-
-    advanceToNext(draftIndex + 1, draftOrder, updatedAvailable, saleLog);
+    advanceToNext(draftIndex + 1, draftOrder, updatedAvailable, saleLog, updatedDrafters);
   };
 
   const cancelAuction = () => {
-    const cancelLog = [...log, `⏭️ ${currentItem.label} returned — no sale. Moving to next item.`];
-    // Move this item to end of draft order
+    const cancelLog = [...log, `⏭️ ${currentItem.label} returned — no sale.`];
     const newOrder = [...draftOrder];
     const removed = newOrder.splice(draftIndex, 1)[0];
     newOrder.push(removed);
     setDraftOrder(newOrder);
     setLog(cancelLog);
-    // Stay at same index (which is now the next item since we removed current)
     if (draftIndex >= newOrder.length) {
-      // Shouldn't happen but safety
-      advanceToNext(0, newOrder, availableItems, cancelLog);
+      advanceToNext(0, newOrder, availableItems, cancelLog, drafters);
     } else {
       const next = newOrder[draftIndex];
       setCurrentItem(next);
       setSelectedWinner(null);
       setWinningBid("");
-      setLog([...cancelLog, `📢 [${next.region}] ${next.label} is up for auction! (${draftIndex + 1} of ${newOrder.length})`]);
+      const nextLog = [...cancelLog, `📢 [${next.region}] ${next.label} is up! (${draftIndex + 1} of ${newOrder.length})`];
+      setLog(nextLog);
+      saveDraft({
+        phase: "draft", drafters, availableItems,
+        draftOrder: newOrder, draftIndex, currentItem: next, log: nextLog,
+        budgetMode, budgetAmount,
+      });
     }
+  };
+
+  // ── Copy results to clipboard ──
+  const copyResults = () => {
+    let text = "🏀 MARCH MADNESS AUCTION DRAFT RESULTS\n";
+    text += "═".repeat(40) + "\n\n";
+    drafters.forEach((d) => {
+      text += `${d.name} — $${totalSpent(d)} spent`;
+      if (hasBudget) text += ` ($${d.budget} remaining)`;
+      text += "\n";
+      REGIONS.forEach((region) => {
+        const items = d.items.filter((item) => item.region === region);
+        if (items.length > 0) {
+          text += `  ${region}:\n`;
+          items.forEach((item) => {
+            text += `    ${item.shortLabel} — $${item.price}\n`;
+          });
+        }
+      });
+      text += "\n";
+    });
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  const resetDraft = () => {
+    clearSave();
+    setPhase("setup");
+    setDrafters([]);
+    setAvailableItems([]);
+    setDraftOrder([]);
+    setDraftIndex(0);
+    setCurrentItem(null);
+    setLog([]);
+    setShowConfetti(false);
+    setHasSavedDraft(false);
   };
 
   const Confetti = () => {
@@ -212,6 +346,20 @@ export default function MarchMadnessAuction() {
             <p style={styles.tagline}>4 Regions · Seeds 1–12 individual · Seeds 13–16 grouped · 52 total items</p>
           </div>
 
+          {/* Resume saved draft banner */}
+          {hasSavedDraft && (
+            <div style={styles.resumeBanner}>
+              <div style={styles.resumeText}>
+                <span style={{ fontSize: 20 }}>💾</span>
+                <span>You have a draft in progress!</span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={styles.resumeBtn} onClick={resumeDraft}>Resume Draft</button>
+                <button style={styles.resumeDiscardBtn} onClick={startFresh}>Discard</button>
+              </div>
+            </div>
+          )}
+
           <div style={styles.setupColumns}>
             {/* Left: Drafters */}
             <div style={styles.setupCard}>
@@ -239,7 +387,7 @@ export default function MarchMadnessAuction() {
               )}
             </div>
 
-            {/* Right: Seed Names with Region Tabs */}
+            {/* Right: Seed Names */}
             <div style={styles.setupCard}>
               <h3 style={styles.cardTitle}>SEED NAMES</h3>
               <p style={styles.cardSubtitle}>Optional — name each team per region</p>
@@ -263,10 +411,7 @@ export default function MarchMadnessAuction() {
                   const fullKey = `${setupSeedTab}-${key}`;
                   return (
                     <div key={fullKey} style={styles.nameRow}>
-                      <div style={{
-                        ...styles.seedTag,
-                        backgroundColor: SEED_COLORS[key],
-                      }}>
+                      <div style={{ ...styles.seedTag, backgroundColor: SEED_COLORS[key] }}>
                         {key === "13-16" ? "13-16" : `#${key}`}
                       </div>
                       <input
@@ -343,6 +488,7 @@ export default function MarchMadnessAuction() {
           {phase === "done" ? "COMPLETE" : `${totalLeft} left`}
         </span>
         {hasBudget && <span style={styles.headerBadgeBudget}>${budgetAmount} budget</span>}
+        <span style={styles.savedBadge}>💾 Auto-saved</span>
       </div>
 
       <div style={styles.draftLayout}>
@@ -389,7 +535,7 @@ export default function MarchMadnessAuction() {
             </div>
           )}
 
-          {/* Region progress below queue */}
+          {/* Region progress */}
           {phase !== "done" && (
             <div style={{ marginTop: 16 }}>
               <h3 style={styles.panelTitle}>REGION PROGRESS</h3>
@@ -428,7 +574,6 @@ export default function MarchMadnessAuction() {
                 {currentItem.label}
               </div>
 
-              {/* Winner */}
               <div style={styles.fieldBlock}>
                 <label style={styles.fieldLabel}>WHO WON?</label>
                 <div style={styles.winnerGrid}>
@@ -457,7 +602,6 @@ export default function MarchMadnessAuction() {
                 </div>
               </div>
 
-              {/* Bid */}
               <div style={styles.fieldBlock}>
                 <label style={styles.fieldLabel}>WINNING BID</label>
                 <div style={styles.bidInputRow}>
@@ -492,7 +636,7 @@ export default function MarchMadnessAuction() {
                 >
                   🔨 CONFIRM SALE
                 </button>
-                <button style={styles.cancelBtn} onClick={cancelAuction}>Cancel</button>
+                <button style={styles.cancelBtn} onClick={cancelAuction}>Skip</button>
               </div>
             </div>
           ) : phase !== "done" ? (
@@ -541,9 +685,17 @@ export default function MarchMadnessAuction() {
         </div>
       </div>
 
-      {/* Bottom: Draft Results */}
+      {/* Bottom: Draft Results + Actions */}
       <div style={styles.resultsSection}>
-        <h3 style={styles.resultsSectionTitle}>📋 DRAFT RESULTS</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+          <h3 style={{ ...styles.resultsSectionTitle, marginBottom: 0, flex: 1 }}>📋 DRAFT RESULTS</h3>
+          <button style={styles.copyBtn} onClick={copyResults}>
+            {copied ? "✓ Copied!" : "📋 Copy Results"}
+          </button>
+          <button style={styles.resetBtn} onClick={resetDraft}>
+            🗑️ New Draft
+          </button>
+        </div>
         <div style={styles.resultsGrid}>
           {drafters.map((d, i) => (
             <div key={i} style={{ ...styles.resultCard, borderTop: `4px solid ${d.color}` }}>
@@ -621,6 +773,25 @@ const styles = {
   },
   subtitle: { fontFamily: "'Oswald', sans-serif", fontSize: 22, fontWeight: 500, letterSpacing: 10, color: "#8b98b0", marginTop: 4 },
   tagline: { color: "#5a6478", marginTop: 10, fontSize: 13, letterSpacing: 1 },
+  // Resume banner
+  resumeBanner: {
+    width: "100%", maxWidth: 720, marginBottom: 16, padding: "16px 20px",
+    borderRadius: 12, background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.25)",
+    display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+  },
+  resumeText: {
+    display: "flex", alignItems: "center", gap: 10, fontSize: 15, fontWeight: 600, color: "#4ADE80",
+  },
+  resumeBtn: {
+    padding: "8px 20px", borderRadius: 8, border: "none",
+    background: "linear-gradient(135deg, #4ADE80, #22c55e)", color: "#0a0e17",
+    fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 14, letterSpacing: 2, cursor: "pointer",
+  },
+  resumeDiscardBtn: {
+    padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)",
+    background: "transparent", color: "#5a6478", fontFamily: "'Source Sans 3', sans-serif",
+    fontWeight: 600, fontSize: 13, cursor: "pointer",
+  },
   setupColumns: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, width: "100%", maxWidth: 720 },
   setupCard: {
     background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
@@ -657,13 +828,6 @@ const styles = {
     borderBottom: "3px solid", fontFamily: "'Oswald', sans-serif", fontSize: 12,
     fontWeight: 600, letterSpacing: 2, cursor: "pointer", transition: "all 0.15s",
   },
-  regionTabDraft: {
-    flex: 1, padding: "7px 4px", background: "transparent", border: "none",
-    borderBottom: "3px solid", fontFamily: "'Oswald', sans-serif", fontSize: 11,
-    fontWeight: 600, letterSpacing: 1, cursor: "pointer", transition: "all 0.15s",
-    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-  },
-  regionCount: { fontSize: 10, opacity: 0.6 },
   seedNameScroll: { display: "flex", flexDirection: "column", gap: 6, maxHeight: 340, overflowY: "auto" },
   settingBlock: { marginBottom: 16 },
   settingLabel: {
@@ -708,6 +872,7 @@ const styles = {
   headerTitle: { fontFamily: "'Oswald', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: 4, flex: 1 },
   headerBadge: { padding: "4px 14px", borderRadius: 20, background: "rgba(230,57,70,0.15)", color: "#E63946", fontWeight: 700, fontSize: 13 },
   headerBadgeBudget: { padding: "4px 14px", borderRadius: 20, background: "rgba(74,222,128,0.1)", color: "#4ADE80", fontWeight: 700, fontSize: 13 },
+  savedBadge: { padding: "4px 12px", borderRadius: 20, background: "rgba(255,255,255,0.05)", color: "#5a6478", fontSize: 11, fontWeight: 600 },
   draftLayout: { display: "grid", gridTemplateColumns: "230px 1fr 220px", gap: 0, minHeight: "55vh" },
   leftPanel: { padding: "16px 14px", borderRight: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.015)" },
   panelTitle: { fontFamily: "'Oswald', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: 3, color: "#5a6478", marginBottom: 10 },
@@ -728,18 +893,11 @@ const styles = {
     padding: "2px 8px", borderRadius: 4, backgroundColor: "rgba(255,255,255,0.25)",
     color: "#fff", fontFamily: "'Oswald', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: 2,
   },
-  queueIdx: {
-    fontFamily: "'Oswald', sans-serif", fontSize: 10, color: "#3e4a5e", flexShrink: 0,
-  },
+  queueIdx: { fontFamily: "'Oswald', sans-serif", fontSize: 10, color: "#3e4a5e", flexShrink: 0 },
   spinner: {
     width: 32, height: 32, borderRadius: "50%",
     border: "3px solid rgba(255,255,255,0.1)", borderTopColor: "#E63946",
     animation: "spin 0.8s linear infinite",
-  },
-  seedBtn: {
-    padding: "8px 12px", borderRadius: 7, border: "none", color: "#fff",
-    fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 12,
-    textAlign: "left", letterSpacing: 1, transition: "all 0.2s ease", width: "100%",
   },
   doneMessage: { textAlign: "center", padding: "40px 0", color: "#8b98b0" },
   centerPanel: { padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 },
@@ -747,9 +905,7 @@ const styles = {
     background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: 14, padding: 22,
   },
-  auctionLabel: {
-    fontFamily: "'Oswald', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: 4, color: "#E63946",
-  },
+  auctionLabel: { fontFamily: "'Oswald', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: 4, color: "#E63946" },
   regionPill: {
     padding: "3px 10px", borderRadius: 12, color: "#fff", fontFamily: "'Oswald', sans-serif",
     fontSize: 11, fontWeight: 600, letterSpacing: 2,
@@ -812,6 +968,16 @@ const styles = {
   budgetItemCount: { fontSize: 10, color: "#5a6478", marginTop: 3 },
   resultsSection: { padding: "28px 24px", borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.015)" },
   resultsSectionTitle: { fontFamily: "'Oswald', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: 4, marginBottom: 18 },
+  copyBtn: {
+    padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(74,222,128,0.3)",
+    background: "rgba(74,222,128,0.08)", color: "#4ADE80", fontFamily: "'Oswald', sans-serif",
+    fontWeight: 700, fontSize: 13, letterSpacing: 2, cursor: "pointer",
+  },
+  resetBtn: {
+    padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(230,57,70,0.3)",
+    background: "rgba(230,57,70,0.08)", color: "#E63946", fontFamily: "'Oswald', sans-serif",
+    fontWeight: 700, fontSize: 13, letterSpacing: 2, cursor: "pointer",
+  },
   resultsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 },
   resultCard: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: 14 },
   resultHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },

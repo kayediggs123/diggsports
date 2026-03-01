@@ -270,7 +270,104 @@ export default function MarchMadnessAuction() {
     }
   };
 
-  // ── Copy results to clipboard ──
+  // ── Download results as Excel ──
+  const loadSheetJS = () => {
+    return new Promise((resolve, reject) => {
+      if (window.XLSX) return resolve(window.XLSX);
+      const script = document.createElement("script");
+      script.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+      script.onload = () => resolve(window.XLSX);
+      script.onerror = () => reject(new Error("Failed to load SheetJS"));
+      document.head.appendChild(script);
+    });
+  };
+
+  const downloadExcel = async () => {
+    try {
+      const XLSX = await loadSheetJS();
+
+      // Sheet 1: Summary
+      const summaryData = drafters.map((d) => ({
+        "Drafter": d.name,
+        "Teams Drafted": d.items.length,
+        "Total Spent": totalSpent(d),
+        ...(hasBudget ? { "Budget Remaining": d.budget } : {}),
+      }));
+
+      // Sheet 2: All Picks
+      const picksData = [];
+      drafters.forEach((d) => {
+        d.items.forEach((item) => {
+          picksData.push({
+            "Drafter": d.name,
+            "Region": item.region,
+            "Seed": typeof item.seed === "number" ? item.seed : item.seed,
+            "Team": item.shortLabel,
+            "Price": item.price,
+          });
+        });
+      });
+
+      // Sheet 3: By Drafter (each drafter's teams grouped)
+      const byDrafterData = [];
+      drafters.forEach((d) => {
+        byDrafterData.push({ "": d.name, "Region": "", "Team": "", "Price": "", "Total": `$${totalSpent(d)}` });
+        REGIONS.forEach((region) => {
+          const regionItems = d.items.filter((item) => item.region === region);
+          regionItems.forEach((item) => {
+            byDrafterData.push({ "": "", "Region": region, "Team": item.shortLabel, "Price": `$${item.price}`, "Total": "" });
+          });
+        });
+        byDrafterData.push({ "": "", "Region": "", "Team": "", "Price": "", "Total": "" });
+      });
+
+      const wb = XLSX.utils.book_new();
+
+      const ws1 = XLSX.utils.json_to_sheet(summaryData);
+      ws1["!cols"] = [{ wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+
+      const ws2 = XLSX.utils.json_to_sheet(picksData);
+      ws2["!cols"] = [{ wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 20 }, { wch: 10 }];
+      XLSX.utils.book_append_sheet(wb, ws2, "All Picks");
+
+      const ws3 = XLSX.utils.json_to_sheet(byDrafterData);
+      ws3["!cols"] = [{ wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws3, "By Drafter");
+
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "march-madness-draft-results.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // Fallback: download as CSV
+      let csv = "Drafter,Region,Seed,Team,Price\n";
+      drafters.forEach((d) => {
+        d.items.forEach((item) => {
+          csv += `"${d.name}","${item.region}","${item.seed}","${item.shortLabel}",${item.price}\n`;
+        });
+      });
+      csv += "\nSummary\nDrafter,Teams,Total Spent" + (hasBudget ? ",Remaining" : "") + "\n";
+      drafters.forEach((d) => {
+        csv += `"${d.name}",${d.items.length},${totalSpent(d)}` + (hasBudget ? `,${d.budget}` : "") + "\n";
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "march-madness-draft-results.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
   const copyResults = () => {
     let text = "🏀 MARCH MADNESS AUCTION DRAFT RESULTS\n";
     text += "═".repeat(40) + "\n\n";
@@ -692,6 +789,9 @@ export default function MarchMadnessAuction() {
           <button style={styles.copyBtn} onClick={copyResults}>
             {copied ? "✓ Copied!" : "📋 Copy Results"}
           </button>
+          <button style={styles.downloadBtn} onClick={downloadExcel}>
+            📥 Download Excel
+          </button>
           <button style={styles.resetBtn} onClick={resetDraft}>
             🗑️ New Draft
           </button>
@@ -971,6 +1071,11 @@ const styles = {
   copyBtn: {
     padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(74,222,128,0.3)",
     background: "rgba(74,222,128,0.08)", color: "#4ADE80", fontFamily: "'Oswald', sans-serif",
+    fontWeight: 700, fontSize: 13, letterSpacing: 2, cursor: "pointer",
+  },
+  downloadBtn: {
+    padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(58,134,255,0.3)",
+    background: "rgba(58,134,255,0.08)", color: "#3A86FF", fontFamily: "'Oswald', sans-serif",
     fontWeight: 700, fontSize: 13, letterSpacing: 2, cursor: "pointer",
   },
   resetBtn: {

@@ -438,7 +438,7 @@ export default function MarchMadnessAuction() {
           <div style={S.logoArea}>
             <div style={S.basketballIcon}>🏀</div>
             <h1 style={S.mainTitle}>MARCH MADNESS</h1>
-            <h2 style={S.subtitle}>AUCTION DRAFT</h2>
+            <h2 style={S.subtitle}>CALCUTTA</h2>
             <p style={S.tagline}>4 Regions · Seeds 1–12 individual · Seeds 13–16 grouped · 52 total items</p>
           </div>
 

@@ -29,6 +29,16 @@ const COLORS = [
 ];
 const SAVE_KEY = "mm-auction-draft-save";
 
+// Payout percentages by round
+const PAYOUT_ROUNDS = [
+  { name: "Round of 32", pct: 0.14 },
+  { name: "Sweet 16", pct: 0.14 },
+  { name: "Elite 8", pct: 0.17 },
+  { name: "Final Four", pct: 0.20 },
+  { name: "Championship Game", pct: 0.20 },
+  { name: "Champion", pct: 0.15 },
+];
+
 const buildDefaultSeedNames = () => {
   const n = {};
   REGIONS.forEach((r) => { for (let s = 1; s <= 12; s++) n[`${r}-${s}`] = ""; n[`${r}-13-16`] = ""; });
@@ -61,8 +71,8 @@ const loadDraftLocal = () => { try { const r = localStorage.getItem(SAVE_KEY); i
 const clearSaveLocal = () => { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} };
 
 const toArray = (val) => { if (Array.isArray(val)) return val; if (val && typeof val === "object") return Object.values(val); return []; };
-const serializeState = (state) => ({ ...state, drafters: (state.drafters || []).map((d) => ({ ...d, budget: d.budget === Infinity ? -1 : d.budget, items: d.items || [] })), availableItems: state.availableItems || [], draftOrder: state.draftOrder || [], log: state.log || [] });
-const deserializeState = (data) => { if (!data) return null; return { ...data, drafters: toArray(data.drafters).map((d) => ({ ...d, budget: d.budget === -1 ? Infinity : d.budget, items: toArray(d.items) })), log: toArray(data.log), availableItems: toArray(data.availableItems), draftOrder: toArray(data.draftOrder), currentItem: data.currentItem || null }; };
+const serializeState = (state) => ({ ...state, drafters: (state.drafters || []).map((d) => ({ ...d, budget: d.budget === Infinity ? -1 : d.budget, items: d.items || [] })), availableItems: state.availableItems || [], draftOrder: state.draftOrder || [], log: state.log || [], bracketPicks: state.bracketPicks || {} });
+const deserializeState = (data) => { if (!data) return null; return { ...data, drafters: toArray(data.drafters).map((d) => ({ ...d, budget: d.budget === -1 ? Infinity : d.budget, items: toArray(d.items) })), log: toArray(data.log), availableItems: toArray(data.availableItems), draftOrder: toArray(data.draftOrder), currentItem: data.currentItem || null, bracketPicks: data.bracketPicks || {} }; };
 const writeRoom = async (roomCode, state) => { try { await set(ref(db, `rooms/${roomCode}`), serializeState(state)); } catch (e) { console.error("Firebase write:", e); } };
 
 export default function MarchMadnessAuction() {
@@ -93,6 +103,9 @@ export default function MarchMadnessAuction() {
   const [editingPrice, setEditingPrice] = useState(null);
   const [editPriceValue, setEditPriceValue] = useState("");
   const [doneTab, setDoneTab] = useState("bracket"); // "bracket" | "list" | "stats"
+  // bracketPicks: { "East-R1-0": "East-1", "East-R2-0": "East-1", ... , "FF-0": "East-1", "FF-1": "South-3", "CHAMP": "East-1" }
+  // Keys: "{region}-R{round}-{matchIdx}" for regional rounds, "FF-0", "FF-1" for final four, "CHAMP" for champion
+  const [bracketPicks, setBracketPicks] = useState({});
   const logRef = useRef(null);
   const listenerRef = useRef(null);
 
@@ -115,6 +128,7 @@ export default function MarchMadnessAuction() {
       setDraftOrder(state.draftOrder || []); setDraftIndex(state.draftIndex || 0);
       setCurrentItem(state.currentItem || null); setLog(state.log || []);
       setBudgetMode(state.budgetMode || "unlimited"); setBudgetAmount(state.budgetAmount || 200);
+      setBracketPicks(state.bracketPicks || {});
       setPhase(state.phase || "draft");
       if (state.phase === "done") setShowConfetti(true);
     } catch (e) { console.error("Error applying remote state:", e); }
@@ -137,8 +151,52 @@ export default function MarchMadnessAuction() {
     } catch (e) { setJoinError("Connection error."); }
   };
 
-  const saveState = (snap) => { saveDraftLocal(snap); if (isHost && roomCode) writeRoom(roomCode, snap); };
+  const saveState = (snap) => { saveDraftLocal({ ...snap, bracketPicks }); if (isHost && roomCode) writeRoom(roomCode, { ...snap, bracketPicks }); };
   const totalSpent = (d) => (d.items || []).reduce((s, i) => s + (i.price || 0), 0);
+  const totalPot = drafters.reduce((s, d) => s + totalSpent(d), 0);
+
+  // Pick a winner in the bracket and cascade (clear downstream picks if changed)
+  const pickBracketWinner = (key, teamId) => {
+    if (isViewer) return;
+    const newPicks = { ...bracketPicks };
+    const oldPick = newPicks[key];
+    newPicks[key] = teamId;
+
+    // If changed, clear downstream picks that depended on old pick
+    if (oldPick && oldPick !== teamId) {
+      const clearDownstream = (k, victim) => {
+        const regionMatch = k.match(/^(\w+)-R(\d)-(\d)$/);
+        if (regionMatch) {
+          const [, reg, roundStr, idxStr] = regionMatch;
+          const round = parseInt(roundStr);
+          const idx = parseInt(idxStr);
+          if (round < 4) {
+            const nextKey = `${reg}-R${round + 1}-${Math.floor(idx / 2)}`;
+            if (newPicks[nextKey] === victim) {
+              newPicks[nextKey] = undefined;
+              clearDownstream(nextKey, victim);
+            }
+          } else if (round === 4) {
+            // Elite 8 winner goes to SF-0 (East/Midwest) or SF-1 (South/West)
+            const sfKey = (reg === "East" || reg === "Midwest") ? "SF-0" : "SF-1";
+            if (newPicks[sfKey] === victim) {
+              newPicks[sfKey] = undefined;
+              clearDownstream(sfKey, victim);
+            }
+          }
+        }
+        if (k === "SF-0" || k === "SF-1") {
+          if (newPicks["CHAMP"] === victim) { newPicks["CHAMP"] = undefined; }
+        }
+      };
+      clearDownstream(key, oldPick);
+    }
+
+    setBracketPicks(newPicks);
+    const snap = { phase, drafters, availableItems, draftOrder, draftIndex, currentItem, log, budgetMode, budgetAmount, bracketPicks: newPicks };
+    saveDraftLocal(snap);
+    if (isHost && roomCode) writeRoom(roomCode, snap);
+  };
 
   const startDraft = () => {
     const names = drafterNames.filter((n) => n.trim());
@@ -279,6 +337,7 @@ export default function MarchMadnessAuction() {
     setPhase(saved.phase); setDrafters(saved.drafters); setAvailableItems(saved.availableItems);
     setDraftOrder(saved.draftOrder); setDraftIndex(saved.draftIndex); setCurrentItem(saved.currentItem);
     setLog(saved.log); setBudgetMode(saved.budgetMode); setBudgetAmount(saved.budgetAmount);
+    setBracketPicks(saved.bracketPicks || {});
     if (saved.phase === "done") setShowConfetti(true);
   };
   const startFresh = () => { clearSaveLocal(); setHasSavedDraft(false); };
@@ -507,87 +566,169 @@ export default function MarchMadnessAuction() {
       return { name: d.name, color: d.color, count: items.length, avg: (ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(1), max: Math.max(...ps), min: Math.min(...ps), total: ps.reduce((a, b) => a + b, 0) };
     }).filter(Boolean);
 
-    // Full NCAA bracket rendering
-    // Round 1 matchups by seed: [top seed, bottom seed]
+    // ── Interactive Bracket ──
     const R1 = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
 
-    // A single team slot in the bracket
-    const Slot = ({ region, seed, flip }) => {
-      const owner = getOwner(region, seed);
-      const label = getTeamLabel(region, seed);
+    // Get team info from a teamId like "East-1" or "East-13-16"
+    const getTeamInfo = (teamId) => {
+      if (!teamId) return null;
+      for (const d of drafters) {
+        for (const item of (d.items || [])) {
+          if (item.id === teamId) return { ...item, drafter: d.name, drafterColor: d.color };
+        }
+      }
+      return null;
+    };
+
+    // Get the two teams competing in a matchup at a given key
+    const getMatchupTeams = (region, round, idx) => {
+      if (round === 1) {
+        const [a, b] = R1[idx];
+        const idA = a >= 13 ? `${region}-13-16` : `${region}-${a}`;
+        const idB = b >= 13 ? `${region}-13-16` : `${region}-${b}`;
+        return [idA, idB];
+      }
+      // For later rounds, look at who was picked in the previous round
+      const prevA = bracketPicks[`${region}-R${round - 1}-${idx * 2}`];
+      const prevB = bracketPicks[`${region}-R${round - 1}-${idx * 2 + 1}`];
+      return [prevA || null, prevB || null];
+    };
+
+    // Clickable team slot
+    const ClickSlot = ({ teamId, pickKey, flip, isSelected }) => {
+      const info = getTeamInfo(teamId);
+      if (!teamId || !info) {
+        return (
+          <div style={{ ...S.bSlot, borderLeftColor: !flip ? "rgba(255,255,255,0.04)" : "transparent", borderRightColor: flip ? "rgba(255,255,255,0.04)" : "transparent", flexDirection: flip ? "row-reverse" : "row", opacity: 0.3 }}>
+            <span style={{ ...S.bTeam, color: "#2a2e3a", fontStyle: "italic", fontSize: 10 }}>TBD</span>
+          </div>
+        );
+      }
+      const selected = isSelected;
       return (
-        <div style={{ ...S.bSlot, borderLeftColor: !flip ? (owner ? owner.color : "rgba(255,255,255,0.08)") : "transparent", borderRightColor: flip ? (owner ? owner.color : "rgba(255,255,255,0.08)") : "transparent", flexDirection: flip ? "row-reverse" : "row", textAlign: flip ? "right" : "left" }}>
-          <span style={S.bSeed}>{seed}</span>
-          <span style={{ ...S.bTeam, color: owner ? "#e8e6e1" : "#3e4a5e" }}>{label}</span>
-          {owner && <span style={{ ...S.bOwner, color: owner.color }}>{owner.name}</span>}
+        <div
+          onClick={() => pickKey && !isViewer && pickBracketWinner(pickKey, teamId)}
+          style={{
+            ...S.bSlot,
+            borderLeftColor: !flip ? (info.drafterColor || "rgba(255,255,255,0.08)") : "transparent",
+            borderRightColor: flip ? (info.drafterColor || "rgba(255,255,255,0.08)") : "transparent",
+            flexDirection: flip ? "row-reverse" : "row",
+            textAlign: flip ? "right" : "left",
+            cursor: pickKey && !isViewer ? "pointer" : "default",
+            background: selected ? `${info.drafterColor}18` : "rgba(255,255,255,0.02)",
+            outline: selected ? `1px solid ${info.drafterColor}50` : "none",
+          }}>
+          <span style={S.bSeed}>{info.seed}</span>
+          <span style={{ ...S.bTeam, color: "#e8e6e1" }}>{info.shortLabel}</span>
+          <span style={{ ...S.bOwner, color: info.drafterColor }}>{info.drafter}</span>
         </div>
       );
     };
 
-    // Empty slot for future rounds
-    const EmptySlot = ({ flip, label }) => (
-      <div style={{ ...S.bSlot, borderLeftColor: !flip ? "rgba(255,255,255,0.05)" : "transparent", borderRightColor: flip ? "rgba(255,255,255,0.05)" : "transparent", flexDirection: flip ? "row-reverse" : "row", textAlign: flip ? "right" : "left", opacity: 0.4 }}>
-        <span style={{ ...S.bTeam, color: "#2a2e3a", fontStyle: "italic", fontSize: 10 }}>{label || ""}</span>
-      </div>
-    );
-
-    // A matchup pair (two slots stacked)
-    const Matchup = ({ children, round }) => (
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 0 }}>
-        {children}
-      </div>
-    );
-
-    // Render one side of the bracket (a region from R1 through Elite 8)
+    // Region bracket with clickable slots
     const RegionBracket = ({ region, flip }) => {
       const rc = REGION_COLORS[region];
-      // Round of 64: 8 matchups = 16 slots
-      // Round of 32: 4 slots
-      // Sweet 16: 2 slots
-      // Elite 8: 1 slot
       return (
         <div style={{ display: "flex", flexDirection: flip ? "row-reverse" : "row", alignItems: "stretch", gap: 0, flex: 1 }}>
-          {/* Round of 64 */}
+          {/* Round 1 */}
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-around", minWidth: 0, flex: "1 1 0" }}>
             <div style={{ ...S.bRoundLabel, color: rc, textAlign: flip ? "right" : "left" }}>{region.toUpperCase()}</div>
-            {R1.map(([a, b], i) => (
-              <div key={i} style={{ ...S.bMatchupBox, marginBottom: i < 7 ? 2 : 0 }}>
-                <Slot region={region} seed={a} flip={flip} />
-                <Slot region={region} seed={b} flip={flip} />
-              </div>
-            ))}
+            {R1.map(([a, b], i) => {
+              const idA = a >= 13 ? `${region}-13-16` : `${region}-${a}`;
+              const idB = b >= 13 ? `${region}-13-16` : `${region}-${b}`;
+              const pickKey = `${region}-R1-${i}`;
+              const picked = bracketPicks[pickKey];
+              return (
+                <div key={i} style={{ ...S.bMatchupBox, marginBottom: i < 7 ? 2 : 0 }}>
+                  <ClickSlot teamId={idA} pickKey={pickKey} flip={flip} isSelected={picked === idA} />
+                  <ClickSlot teamId={idB} pickKey={pickKey} flip={flip} isSelected={picked === idB} />
+                </div>
+              );
+            })}
           </div>
-          {/* Round of 32 */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-around", minWidth: 0, flex: "0.8 1 0" }}>
+          {/* Round 2 */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-around", minWidth: 0, flex: "0.85 1 0" }}>
             <div style={{ ...S.bRoundHeader, textAlign: flip ? "right" : "left" }}>R32</div>
-            {[0,1,2,3].map((i) => (
-              <div key={i} style={S.bMatchupBox}>
-                <EmptySlot flip={flip} label="Winner" />
-                <EmptySlot flip={flip} label="Winner" />
-              </div>
-            ))}
+            {[0,1,2,3].map((i) => {
+              const [tA, tB] = [bracketPicks[`${region}-R1-${i*2}`], bracketPicks[`${region}-R1-${i*2+1}`]];
+              const pickKey = `${region}-R2-${i}`;
+              const picked = bracketPicks[pickKey];
+              return (
+                <div key={i} style={S.bMatchupBox}>
+                  <ClickSlot teamId={tA} pickKey={tA && tB ? pickKey : null} flip={flip} isSelected={picked === tA} />
+                  <ClickSlot teamId={tB} pickKey={tA && tB ? pickKey : null} flip={flip} isSelected={picked === tB} />
+                </div>
+              );
+            })}
           </div>
-          {/* Sweet 16 */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-around", minWidth: 0, flex: "0.7 1 0" }}>
+          {/* Round 3 - Sweet 16 */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-around", minWidth: 0, flex: "0.75 1 0" }}>
             <div style={{ ...S.bRoundHeader, textAlign: flip ? "right" : "left" }}>S16</div>
-            {[0,1].map((i) => (
-              <div key={i} style={S.bMatchupBox}>
-                <EmptySlot flip={flip} label="Winner" />
-                <EmptySlot flip={flip} label="Winner" />
-              </div>
-            ))}
+            {[0,1].map((i) => {
+              const [tA, tB] = [bracketPicks[`${region}-R2-${i*2}`], bracketPicks[`${region}-R2-${i*2+1}`]];
+              const pickKey = `${region}-R3-${i}`;
+              const picked = bracketPicks[pickKey];
+              return (
+                <div key={i} style={S.bMatchupBox}>
+                  <ClickSlot teamId={tA} pickKey={tA && tB ? pickKey : null} flip={flip} isSelected={picked === tA} />
+                  <ClickSlot teamId={tB} pickKey={tA && tB ? pickKey : null} flip={flip} isSelected={picked === tB} />
+                </div>
+              );
+            })}
           </div>
-          {/* Elite 8 */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0, flex: "0.7 1 0" }}>
+          {/* Round 4 - Elite 8 */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0, flex: "0.75 1 0" }}>
             <div style={{ ...S.bRoundHeader, textAlign: flip ? "right" : "left" }}>E8</div>
-            <div style={S.bMatchupBox}>
-              <EmptySlot flip={flip} label="Winner" />
-              <EmptySlot flip={flip} label="Winner" />
-            </div>
+            {(() => {
+              const [tA, tB] = [bracketPicks[`${region}-R3-0`], bracketPicks[`${region}-R3-1`]];
+              const pickKey = `${region}-R4-0`;
+              const picked = bracketPicks[pickKey];
+              return (
+                <div style={S.bMatchupBox}>
+                  <ClickSlot teamId={tA} pickKey={tA && tB ? pickKey : null} flip={flip} isSelected={picked === tA} />
+                  <ClickSlot teamId={tB} pickKey={tA && tB ? pickKey : null} flip={flip} isSelected={picked === tB} />
+                </div>
+              );
+            })()}
           </div>
         </div>
       );
     };
+
+    // Compute round winners for payouts
+    const getRoundWinners = (round) => {
+      const winners = [];
+      if (round === 1) { REGIONS.forEach((r) => { for (let i = 0; i < 8; i++) { const w = bracketPicks[`${r}-R1-${i}`]; if (w) winners.push(w); } }); }
+      else if (round === 2) { REGIONS.forEach((r) => { for (let i = 0; i < 4; i++) { const w = bracketPicks[`${r}-R2-${i}`]; if (w) winners.push(w); } }); }
+      else if (round === 3) { REGIONS.forEach((r) => { for (let i = 0; i < 2; i++) { const w = bracketPicks[`${r}-R3-${i}`]; if (w) winners.push(w); } }); }
+      else if (round === 4) { REGIONS.forEach((r) => { const w = bracketPicks[`${r}-R4-0`]; if (w) winners.push(w); }); }
+      else if (round === 5) { ["SF-0", "SF-1"].forEach((k) => { const w = bracketPicks[k]; if (w) winners.push(w); }); }
+      else if (round === 6) { const w = bracketPicks["CHAMP"]; if (w) winners.push(w); }
+      return winners;
+    };
+
+    // Compute payouts per drafter
+    const computePayouts = () => {
+      const payouts = {};
+      drafters.forEach((d) => { payouts[d.name] = { total: 0, rounds: {} }; });
+      PAYOUT_ROUNDS.forEach((pr, ri) => {
+        const roundNum = ri + 1;
+        const roundPool = totalPot * pr.pct;
+        const winners = getRoundWinners(roundNum);
+        if (winners.length === 0) return;
+        const perWinner = roundPool / winners.length;
+        winners.forEach((teamId) => {
+          const info = getTeamInfo(teamId);
+          if (info && payouts[info.drafter]) {
+            payouts[info.drafter].total += perWinner;
+            if (!payouts[info.drafter].rounds[pr.name]) payouts[info.drafter].rounds[pr.name] = 0;
+            payouts[info.drafter].rounds[pr.name] += perWinner;
+          }
+        });
+      });
+      return payouts;
+    };
+    const payouts = computePayouts();
 
     return (
       <div style={S.page}><style>{globalCSS}</style>
@@ -597,6 +738,7 @@ export default function MarchMadnessAuction() {
           <span style={S.headerIcon}>🏆</span>
           <h1 style={S.headerTitle}>DRAFT COMPLETE</h1>
           {isLive && <span style={S.liveBadge}>{isHost ? `📡 ${roomCode}` : `👀 ${roomCode}`}</span>}
+          <span style={{ ...S.headerBadge, background: "rgba(233,196,106,0.15)", color: "#E9C46A" }}>Pot: ${totalPot}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button style={S.copyBtn} onClick={copyResults}>{copied ? "✓ Copied!" : "📋 Copy"}</button>
             <button style={S.downloadBtn} onClick={downloadExcel}>📥 Excel</button>
@@ -606,7 +748,7 @@ export default function MarchMadnessAuction() {
 
         {/* Tab bar */}
         <div style={S.doneTabBar}>
-          {[{ key: "bracket", label: "🏆 BRACKET" }, { key: "list", label: "📋 RESULTS" }, { key: "stats", label: "📊 STATS" }].map((t) => (
+          {[{ key: "bracket", label: "🏆 BRACKET" }, { key: "list", label: "📋 RESULTS" }, { key: "payouts", label: "💰 PAYOUTS" }, { key: "stats", label: "📊 STATS" }].map((t) => (
             <button key={t.key}
               style={{ ...S.doneTabBtn, ...(doneTab === t.key ? S.doneTabBtnActive : {}) }}
               onClick={() => setDoneTab(t.key)}>{t.label}</button>
@@ -616,49 +758,75 @@ export default function MarchMadnessAuction() {
         {/* BRACKET TAB */}
         {doneTab === "bracket" && (
           <div style={{ padding: "20px 16px", overflowX: "auto" }}>
+            <p style={{ fontSize: 12, color: "#5a6478", marginBottom: 12, textAlign: "center" }}>Click a team to advance them through the bracket</p>
             <div style={{ minWidth: 1100, display: "flex", flexDirection: "column", gap: 0 }}>
 
-              {/* Top half: East (left) and Midwest (right) → Final Four top */}
+              {/* Top: East → FF → Midwest */}
               <div style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
                 <RegionBracket region="East" flip={false} />
-                {/* Final Four top */}
-                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 120, alignItems: "center", gap: 4, padding: "0 6px" }}>
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 130, alignItems: "center", gap: 4, padding: "0 6px" }}>
                   <div style={S.bFinalLabel}>FINAL FOUR</div>
-                  <div style={{ ...S.bMatchupBox, width: "100%" }}>
-                    <EmptySlot flip={false} label="East" />
-                    <EmptySlot flip={false} label="Midwest" />
-                  </div>
+                  {(() => {
+                    const tA = bracketPicks["East-R4-0"];
+                    const tB = bracketPicks["Midwest-R4-0"];
+                    const pickKey = "SF-0";
+                    const picked = bracketPicks[pickKey];
+                    return (
+                      <div style={{ ...S.bMatchupBox, width: "100%" }}>
+                        <ClickSlot teamId={tA} pickKey={tA && tB ? pickKey : null} flip={false} isSelected={picked === tA} />
+                        <ClickSlot teamId={tB} pickKey={tA && tB ? pickKey : null} flip={false} isSelected={picked === tB} />
+                      </div>
+                    );
+                  })()}
                 </div>
                 <RegionBracket region="Midwest" flip={true} />
               </div>
 
-              {/* Championship center */}
+              {/* Championship */}
               <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                 <div style={{ textAlign: "center" }}>
                   <div style={S.bChampLabel}>🏆 CHAMPIONSHIP</div>
-                  <div style={{ ...S.bMatchupBox, minWidth: 200 }}>
-                    <EmptySlot flip={false} label="Semifinal 1" />
-                    <EmptySlot flip={false} label="Semifinal 2" />
-                  </div>
-                  <div style={S.bChampWinner}>CHAMPION</div>
+                  {(() => {
+                    const tA = bracketPicks["SF-0"];
+                    const tB = bracketPicks["SF-1"];
+                    const pickKey = "CHAMP";
+                    const picked = bracketPicks[pickKey];
+                    return (
+                      <div style={{ ...S.bMatchupBox, minWidth: 220 }}>
+                        <ClickSlot teamId={tA} pickKey={tA && tB ? pickKey : null} flip={false} isSelected={picked === tA} />
+                        <ClickSlot teamId={tB} pickKey={tA && tB ? pickKey : null} flip={false} isSelected={picked === tB} />
+                      </div>
+                    );
+                  })()}
+                  {bracketPicks["CHAMP"] && (() => {
+                    const info = getTeamInfo(bracketPicks["CHAMP"]);
+                    return info ? <div style={{ ...S.bChampWinner, color: info.drafterColor }}>🏆 {info.shortLabel} — {info.drafter}</div> : null;
+                  })()}
                 </div>
               </div>
 
-              {/* Bottom half: South (left) and West (right) → Final Four bottom */}
+              {/* Bottom: South → FF → West */}
               <div style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
                 <RegionBracket region="South" flip={false} />
-                {/* Final Four bottom */}
-                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 120, alignItems: "center", gap: 4, padding: "0 6px" }}>
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 130, alignItems: "center", gap: 4, padding: "0 6px" }}>
                   <div style={S.bFinalLabel}>FINAL FOUR</div>
-                  <div style={{ ...S.bMatchupBox, width: "100%" }}>
-                    <EmptySlot flip={false} label="South" />
-                    <EmptySlot flip={false} label="West" />
-                  </div>
+                  {(() => {
+                    const tA = bracketPicks["South-R4-0"];
+                    const tB = bracketPicks["West-R4-0"];
+                    const pickKey = "SF-1";
+                    const picked = bracketPicks[pickKey];
+                    return (
+                      <div style={{ ...S.bMatchupBox, width: "100%" }}>
+                        <ClickSlot teamId={tA} pickKey={tA && tB ? pickKey : null} flip={false} isSelected={picked === tA} />
+                        <ClickSlot teamId={tB} pickKey={tA && tB ? pickKey : null} flip={false} isSelected={picked === tB} />
+                      </div>
+                    );
+                  })()}
                 </div>
                 <RegionBracket region="West" flip={true} />
               </div>
 
-              {/* Ownership Legend */}
+              {/* Legend */}
               <div style={{ ...S.bracketLegend, marginTop: 20 }}>
                 <h4 style={{ ...S.panelTitle, marginBottom: 8 }}>OWNERSHIP LEGEND</h4>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
@@ -672,6 +840,66 @@ export default function MarchMadnessAuction() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* PAYOUTS TAB */}
+        {doneTab === "payouts" && (
+          <div style={S.statsSection}>
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={S.statsSubTitle}>PAYOUT STRUCTURE</h4>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+                {PAYOUT_ROUNDS.map((pr, i) => (
+                  <div key={i} style={{ ...S.statCard, flex: "1 1 140px", minWidth: 140 }}>
+                    <div style={{ ...S.statValue, fontSize: 20 }}>{(pr.pct * 100)}%</div>
+                    <div style={S.statLabel}>{pr.name.toUpperCase()}</div>
+                    <div style={{ ...S.statDetail, color: "#4ADE80" }}>${(totalPot * pr.pct).toFixed(0)}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ ...S.statCard, textAlign: "center", marginBottom: 20 }}>
+                <div style={{ ...S.statValue, fontSize: 32, color: "#E9C46A" }}>${totalPot}</div>
+                <div style={S.statLabel}>TOTAL POT</div>
+              </div>
+            </div>
+
+            <h4 style={S.statsSubTitle}>PROJECTED PAYOUTS BY DRAFTER</h4>
+            <div style={S.statsTable}>
+              <div style={S.statsHeaderRow}>
+                <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Drafter</span>
+                <span style={S.statsHeaderCell}>Spent</span>
+                {PAYOUT_ROUNDS.map((pr, i) => (
+                  <span key={i} style={{ ...S.statsHeaderCell, width: 80 }}>{pr.name.split(" ").pop()}</span>
+                ))}
+                <span style={{ ...S.statsHeaderCell, width: 85 }}>Payout</span>
+                <span style={{ ...S.statsHeaderCell, width: 80 }}>Profit</span>
+              </div>
+              {drafters.map((d) => {
+                const p = payouts[d.name] || { total: 0, rounds: {} };
+                const spent = totalSpent(d);
+                const profit = p.total - spent;
+                return (
+                  <div key={d.name} style={S.statsRow}>
+                    <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.color }}></div>
+                      <span style={{ fontWeight: 600 }}>{d.name}</span>
+                    </span>
+                    <span style={S.statsCell}>${spent}</span>
+                    {PAYOUT_ROUNDS.map((pr, i) => (
+                      <span key={i} style={{ ...S.statsCell, width: 80, color: (p.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e" }}>
+                        ${(p.rounds[pr.name] || 0).toFixed(0)}
+                      </span>
+                    ))}
+                    <span style={{ ...S.statsCell, width: 85, color: "#E9C46A", fontWeight: 700 }}>${p.total.toFixed(0)}</span>
+                    <span style={{ ...S.statsCell, width: 80, color: profit >= 0 ? "#4ADE80" : "#E63946", fontWeight: 700 }}>{profit >= 0 ? "+" : ""}${profit.toFixed(0)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p style={{ fontSize: 11, color: "#3e4a5e", marginTop: 12, fontStyle: "italic" }}>
+              Payouts update as you fill in bracket winners. Pick all games to see final projections.
+            </p>
           </div>
         )}
 
@@ -1117,3 +1345,4 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
+

@@ -594,31 +594,16 @@ export default function MarchMadnessAuction() {
           ) : phase !== "done" ? (
             <div style={S.waitingBlock}><div style={S.spinner}></div><p style={{ color: "#8b98b0", fontSize: 16, fontWeight: 600, marginTop: 12 }}>Loading draft...</p></div>
           ) : null}
-
-          <div style={S.logContainer}>
-            <h4 style={S.logTitle}>ACTIVITY LOG</h4>
-            <div ref={logRef} style={S.logScroll}>
-              {log.map((entry, i) => (
-                <div key={i} style={{ ...S.logEntry, color: entry.startsWith("✅") ? "#4ADE80" : entry.startsWith("🏆") ? "#E9C46A" : "#8b98b0", fontWeight: entry.startsWith("✅") || entry.startsWith("🏆") ? 700 : 400 }}>{entry}</div>
-              ))}
-            </div>
-          </div>
         </div>
 
-        {/* Right: Budgets / Totals */}
+        {/* Right: Activity Log */}
         <div style={S.rightPanel}>
-          <h3 style={S.panelTitle}>{hasBudget ? "BUDGETS" : "TOTALS"}</h3>
-          {drafters.map((d, i) => (
-            <div key={i} style={S.budgetCard}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <div style={{ ...S.budgetDot, backgroundColor: d.color }}></div>
-                <span style={S.budgetName}>{d.name}</span>
-                <span style={S.budgetAmountText}>${hasBudget ? d.budget : totalSpent(d)}</span>
-              </div>
-              {hasBudget && (<div style={S.budgetBar}><div style={{ ...S.budgetFill, width: `${Math.max(0, (d.budget / budgetAmount) * 100)}%`, backgroundColor: d.color }}></div></div>)}
-              <div style={S.budgetItemCount}>{d.items.length} team{d.items.length !== 1 ? "s" : ""}{hasBudget ? ` · $${totalSpent(d)} spent` : ""}</div>
-            </div>
-          ))}
+          <h3 style={S.panelTitle}>ACTIVITY LOG</h3>
+          <div ref={logRef} style={S.rightLogScroll}>
+            {log.map((entry, i) => (
+              <div key={i} style={{ ...S.logEntry, color: entry.startsWith("✅") ? "#4ADE80" : entry.startsWith("🏆") ? "#E9C46A" : "#8b98b0", fontWeight: entry.startsWith("✅") || entry.startsWith("🏆") ? 700 : 400 }}>{entry}</div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -959,7 +944,8 @@ const S = {
   logScroll: { flex: 1, overflowY: "auto", maxHeight: 180 },
   logEntry: { fontSize: 12, padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" },
   // Right panel
-  rightPanel: { padding: "16px 14px", borderLeft: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.015)", overflowY: "auto" },
+  rightPanel: { padding: "16px 14px", borderLeft: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.015)", overflowY: "auto", display: "flex", flexDirection: "column" },
+  rightLogScroll: { flex: 1, overflowY: "auto", maxHeight: "calc(100vh - 160px)" },
   budgetCard: { marginBottom: 8, padding: "8px 6px", borderRadius: 8 },
   budgetDot: { width: 10, height: 10, borderRadius: "50%", flexShrink: 0 },
   budgetName: { fontSize: 13, fontWeight: 600, flex: 1 },

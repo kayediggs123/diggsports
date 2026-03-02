@@ -406,6 +406,38 @@ export default function MarchMadnessAuction() {
             </div>
           )}
 
+          {/* Settings + Start */}
+          <div style={{ ...S.setupCard, maxWidth: 720, marginBottom: 16 }}>
+            <div style={S.settingBlock}>
+              <span style={S.settingLabel}>BID LIMIT</span>
+              <div style={S.toggleRow}>
+                <button style={{ ...S.toggleBtn, ...(budgetMode === "unlimited" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("unlimited")}>
+                  <span style={S.toggleIcon}>♾️</span><span>No Limit</span></button>
+                <button style={{ ...S.toggleBtn, ...(budgetMode === "capped" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("capped")}>
+                  <span style={S.toggleIcon}>💰</span><span>Set Max Budget</span></button>
+              </div>
+              {budgetMode === "capped" && (
+                <div style={S.budgetInputRow}><span style={S.budgetDollar}>$</span>
+                  <input style={S.budgetInputField} type="number" min={10} value={budgetAmount}
+                    onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) setBudgetAmount(v); }} />
+                  <span style={S.budgetPerDrafter}>per drafter</span></div>
+              )}
+              <p style={S.settingHint}>{budgetMode === "unlimited" ? "No spending cap." : `$${budgetAmount} per drafter across all 52 items.`}</p>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              {!isHost ? (<>
+                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                  onClick={startSolo} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
+                <button style={{ ...S.startBtnLive, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                  onClick={startAsHost} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
+              </>) : (
+                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                  onClick={startDraft} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START THE DRAFT 🏀</button>
+              )}
+            </div>
+          </div>
+
+          {/* Drafters + Seed Names at bottom */}
           <div style={S.setupColumns}>
             <div style={S.setupCard}>
               <h3 style={S.cardTitle}>DRAFTERS</h3>
@@ -443,36 +475,6 @@ export default function MarchMadnessAuction() {
                   </div>);
                 })}
               </div>
-            </div>
-          </div>
-
-          <div style={{ ...S.setupCard, maxWidth: 720, marginTop: 20 }}>
-            <div style={S.settingBlock}>
-              <span style={S.settingLabel}>BID LIMIT</span>
-              <div style={S.toggleRow}>
-                <button style={{ ...S.toggleBtn, ...(budgetMode === "unlimited" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("unlimited")}>
-                  <span style={S.toggleIcon}>♾️</span><span>No Limit</span></button>
-                <button style={{ ...S.toggleBtn, ...(budgetMode === "capped" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("capped")}>
-                  <span style={S.toggleIcon}>💰</span><span>Set Max Budget</span></button>
-              </div>
-              {budgetMode === "capped" && (
-                <div style={S.budgetInputRow}><span style={S.budgetDollar}>$</span>
-                  <input style={S.budgetInputField} type="number" min={10} value={budgetAmount}
-                    onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) setBudgetAmount(v); }} />
-                  <span style={S.budgetPerDrafter}>per drafter</span></div>
-              )}
-              <p style={S.settingHint}>{budgetMode === "unlimited" ? "No spending cap." : `$${budgetAmount} per drafter across all 52 items.`}</p>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              {!isHost ? (<>
-                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startSolo} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
-                <button style={{ ...S.startBtnLive, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startAsHost} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
-              </>) : (
-                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startDraft} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START THE DRAFT 🏀</button>
-              )}
             </div>
           </div>
         </div>
@@ -655,6 +657,187 @@ export default function MarchMadnessAuction() {
           ))}
         </div>
       </div>
+
+      {/* Statistics Section */}
+      {(() => {
+        const allPicks = drafters.flatMap((d) => (d.items || []).map((item) => ({ ...item, drafter: d.name })));
+        if (allPicks.length === 0) return null;
+
+        const prices = allPicks.map((p) => p.price);
+        const overallAvg = (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(1);
+        const overallMax = Math.max(...prices);
+        const overallMin = Math.min(...prices);
+        const overallTotal = prices.reduce((a, b) => a + b, 0);
+        const maxPick = allPicks.find((p) => p.price === overallMax);
+        const minPick = allPicks.find((p) => p.price === overallMin);
+
+        // Per-seed stats
+        const seedGroups = {};
+        allPicks.forEach((p) => {
+          const key = p.seed;
+          if (!seedGroups[key]) seedGroups[key] = [];
+          seedGroups[key].push(p);
+        });
+        const seedStats = Object.entries(seedGroups).map(([seed, picks]) => {
+          const ps = picks.map((p) => p.price);
+          return {
+            seed,
+            count: picks.length,
+            avg: (ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(1),
+            max: Math.max(...ps),
+            min: Math.min(...ps),
+            total: ps.reduce((a, b) => a + b, 0),
+          };
+        }).sort((a, b) => {
+          const na = a.seed === "13-16" ? 13 : parseInt(a.seed);
+          const nb = b.seed === "13-16" ? 13 : parseInt(b.seed);
+          return na - nb;
+        });
+
+        // Per-region stats
+        const regionStats = REGIONS.map((region) => {
+          const rPicks = allPicks.filter((p) => p.region === region);
+          if (rPicks.length === 0) return null;
+          const ps = rPicks.map((p) => p.price);
+          return {
+            region,
+            count: rPicks.length,
+            avg: (ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(1),
+            max: Math.max(...ps),
+            min: Math.min(...ps),
+            total: ps.reduce((a, b) => a + b, 0),
+          };
+        }).filter(Boolean);
+
+        // Per-drafter stats
+        const drafterStats = drafters.map((d) => {
+          const items = d.items || [];
+          if (items.length === 0) return null;
+          const ps = items.map((i) => i.price);
+          return {
+            name: d.name,
+            color: d.color,
+            count: items.length,
+            avg: (ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(1),
+            max: Math.max(...ps),
+            min: Math.min(...ps),
+            total: ps.reduce((a, b) => a + b, 0),
+          };
+        }).filter(Boolean);
+
+        return (
+          <div style={S.statsSection}>
+            <h3 style={S.statsSectionTitle}>📊 DRAFT STATISTICS</h3>
+
+            {/* Overview cards */}
+            <div style={S.statsOverview}>
+              <div style={S.statCard}>
+                <div style={S.statValue}>${overallTotal}</div>
+                <div style={S.statLabel}>TOTAL SPENT</div>
+              </div>
+              <div style={S.statCard}>
+                <div style={S.statValue}>${overallAvg}</div>
+                <div style={S.statLabel}>AVG BID</div>
+              </div>
+              <div style={S.statCard}>
+                <div style={{ ...S.statValue, color: "#4ADE80" }}>${overallMax}</div>
+                <div style={S.statLabel}>HIGHEST BID</div>
+                {maxPick && <div style={S.statDetail}>{maxPick.shortLabel} ({maxPick.region}) → {maxPick.drafter}</div>}
+              </div>
+              <div style={S.statCard}>
+                <div style={{ ...S.statValue, color: "#E9C46A" }}>${overallMin}</div>
+                <div style={S.statLabel}>LOWEST BID</div>
+                {minPick && <div style={S.statDetail}>{minPick.shortLabel} ({minPick.region}) → {minPick.drafter}</div>}
+              </div>
+            </div>
+
+            {/* By Seed */}
+            <div style={S.statsTableContainer}>
+              <h4 style={S.statsSubTitle}>BY SEED</h4>
+              <div style={S.statsTable}>
+                <div style={S.statsHeaderRow}>
+                  <span style={{ ...S.statsHeaderCell, flex: 1 }}>Seed</span>
+                  <span style={S.statsHeaderCell}>Picks</span>
+                  <span style={S.statsHeaderCell}>Avg</span>
+                  <span style={S.statsHeaderCell}>Max</span>
+                  <span style={S.statsHeaderCell}>Min</span>
+                  <span style={S.statsHeaderCell}>Total</span>
+                </div>
+                {seedStats.map((s) => (
+                  <div key={s.seed} style={S.statsRow}>
+                    <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[s.seed] }}>
+                        {s.seed === "13-16" ? "13-16" : `#${s.seed}`}
+                      </span>
+                    </span>
+                    <span style={S.statsCell}>{s.count}</span>
+                    <span style={S.statsCell}>${s.avg}</span>
+                    <span style={{ ...S.statsCell, color: "#4ADE80" }}>${s.max}</span>
+                    <span style={{ ...S.statsCell, color: "#E9C46A" }}>${s.min}</span>
+                    <span style={S.statsCell}>${s.total}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* By Region */}
+            <div style={S.statsTableContainer}>
+              <h4 style={S.statsSubTitle}>BY REGION</h4>
+              <div style={S.statsTable}>
+                <div style={S.statsHeaderRow}>
+                  <span style={{ ...S.statsHeaderCell, flex: 1 }}>Region</span>
+                  <span style={S.statsHeaderCell}>Picks</span>
+                  <span style={S.statsHeaderCell}>Avg</span>
+                  <span style={S.statsHeaderCell}>Max</span>
+                  <span style={S.statsHeaderCell}>Min</span>
+                  <span style={S.statsHeaderCell}>Total</span>
+                </div>
+                {regionStats.map((r) => (
+                  <div key={r.region} style={S.statsRow}>
+                    <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: REGION_COLORS[r.region] }}></div>
+                      <span style={{ fontWeight: 600 }}>{r.region}</span>
+                    </span>
+                    <span style={S.statsCell}>{r.count}</span>
+                    <span style={S.statsCell}>${r.avg}</span>
+                    <span style={{ ...S.statsCell, color: "#4ADE80" }}>${r.max}</span>
+                    <span style={{ ...S.statsCell, color: "#E9C46A" }}>${r.min}</span>
+                    <span style={S.statsCell}>${r.total}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* By Drafter */}
+            <div style={S.statsTableContainer}>
+              <h4 style={S.statsSubTitle}>BY DRAFTER</h4>
+              <div style={S.statsTable}>
+                <div style={S.statsHeaderRow}>
+                  <span style={{ ...S.statsHeaderCell, flex: 1 }}>Drafter</span>
+                  <span style={S.statsHeaderCell}>Teams</span>
+                  <span style={S.statsHeaderCell}>Avg</span>
+                  <span style={S.statsHeaderCell}>Max</span>
+                  <span style={S.statsHeaderCell}>Min</span>
+                  <span style={S.statsHeaderCell}>Total</span>
+                </div>
+                {drafterStats.map((d) => (
+                  <div key={d.name} style={S.statsRow}>
+                    <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.color }}></div>
+                      <span style={{ fontWeight: 600 }}>{d.name}</span>
+                    </span>
+                    <span style={S.statsCell}>{d.count}</span>
+                    <span style={S.statsCell}>${d.avg}</span>
+                    <span style={{ ...S.statsCell, color: "#4ADE80" }}>${d.max}</span>
+                    <span style={{ ...S.statsCell, color: "#E9C46A" }}>${d.min}</span>
+                    <span style={S.statsCell}>${d.total}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -802,4 +985,20 @@ const S = {
   resultItem: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   resultSeedBadge: { padding: "2px 8px", borderRadius: 4, color: "#fff", fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: 1 },
   resultPrice: { fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, color: "#4ADE80" },
+  // Stats
+  statsSection: { padding: "28px 24px", borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)" },
+  statsSectionTitle: { fontFamily: "'Oswald', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: 4, marginBottom: 18 },
+  statsOverview: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 24 },
+  statCard: { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "16px 14px", textAlign: "center" },
+  statValue: { fontFamily: "'Oswald', sans-serif", fontSize: 28, fontWeight: 700, color: "#e8e6e1", letterSpacing: 1 },
+  statLabel: { fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 3, color: "#5a6478", marginTop: 4 },
+  statDetail: { fontSize: 11, color: "#8b98b0", marginTop: 6, fontWeight: 600 },
+  statsTableContainer: { marginBottom: 20 },
+  statsSubTitle: { fontFamily: "'Oswald', sans-serif", fontSize: 13, fontWeight: 600, letterSpacing: 3, color: "#8b98b0", marginBottom: 10 },
+  statsTable: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, overflow: "hidden" },
+  statsHeaderRow: { display: "flex", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" },
+  statsHeaderCell: { fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 2, color: "#5a6478", width: 70, textAlign: "right", flexShrink: 0 },
+  statsRow: { display: "flex", alignItems: "center", padding: "9px 14px", borderBottom: "1px solid rgba(255,255,255,0.03)" },
+  statsCell: { fontFamily: "'Oswald', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8e6e1", width: 70, textAlign: "right", flexShrink: 0 },
 };
+

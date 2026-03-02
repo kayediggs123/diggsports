@@ -130,7 +130,7 @@ export default function MarchMadnessAuction() {
       setBudgetMode(state.budgetMode || "unlimited"); setBudgetAmount(state.budgetAmount || 200);
       setBracketPicks(state.bracketPicks || {});
       setPhase(state.phase || "draft");
-      if (state.phase === "done") setShowConfetti(true);
+      if (state.phase === "done") 
     } catch (e) { console.error("Error applying remote state:", e); }
   }, []);
 
@@ -220,7 +220,7 @@ export default function MarchMadnessAuction() {
 
   const advanceToNext = (nextIndex, order, avail, logArr, dftrs) => {
     if (nextIndex >= order.length) {
-      setPhase("done"); setShowConfetti(true); setCurrentItem(null);
+      setPhase("done");  setCurrentItem(null);
       const doneLog = [...logArr, "🏆 ALL ITEMS DRAFTED! The auction is complete!"];
       setLog(doneLog);
       saveState({ phase: "done", drafters: dftrs, availableItems: avail, draftOrder: order, draftIndex: nextIndex, currentItem: null, log: doneLog, budgetMode, budgetAmount });
@@ -280,7 +280,7 @@ export default function MarchMadnessAuction() {
     setAvailableItems(curAvail);
     setLog(curLog);
     setPhase("done");
-    setShowConfetti(true);
+    
     setCurrentItem(null);
     saveState({ phase: "done", drafters: curDrafters, availableItems: curAvail, draftOrder, draftIndex: draftOrder.length, currentItem: null, log: curLog, budgetMode, budgetAmount });
   };
@@ -376,7 +376,7 @@ export default function MarchMadnessAuction() {
     setDraftOrder(saved.draftOrder); setDraftIndex(saved.draftIndex); setCurrentItem(saved.currentItem);
     setLog(saved.log); setBudgetMode(saved.budgetMode); setBudgetAmount(saved.budgetAmount);
     setBracketPicks(saved.bracketPicks || {});
-    if (saved.phase === "done") setShowConfetti(true);
+    if (saved.phase === "done") 
   };
   const startFresh = () => { clearSaveLocal(); setHasSavedDraft(false); };
   const resetDraft = () => {
@@ -770,7 +770,6 @@ export default function MarchMadnessAuction() {
 
     return (
       <div style={S.page}><style>{globalCSS}</style>
-        {showConfetti && <Confetti />}
 
         <div style={S.header}>
           <span style={S.headerIcon}>🏆</span>
@@ -889,7 +888,7 @@ export default function MarchMadnessAuction() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
                 {PAYOUT_ROUNDS.map((pr, i) => (
                   <div key={i} style={{ ...S.statCard, flex: "1 1 140px", minWidth: 140 }}>
-                    <div style={{ ...S.statValue, fontSize: 20 }}>{(pr.pct * 100)}%</div>
+                    <div style={{ ...S.statValue, fontSize: 20 }}>{Math.round(pr.pct * 100)}%</div>
                     <div style={S.statLabel}>{pr.name.toUpperCase()}</div>
                     <div style={{ ...S.statDetail, color: "#4ADE80" }}>${(totalPot * pr.pct).toFixed(0)}</div>
                   </div>

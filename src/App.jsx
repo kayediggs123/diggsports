@@ -378,25 +378,6 @@ export default function MarchMadnessAuction() {
             </div>
           )}
 
-          {!isHost && (
-            <div style={{ ...S.setupCard, maxWidth: 720, marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <h3 style={S.cardTitle}>👀 JOIN A LIVE DRAFT</h3>
-                  <p style={S.cardSubtitle}>Enter a room code to watch in real-time</p>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input style={{ ...S.nameInput, width: 130, textAlign: "center", fontSize: 18, fontFamily: "'Oswald', sans-serif", fontWeight: 700, letterSpacing: 4, textTransform: "uppercase" }}
-                    placeholder="CODE" maxLength={6} value={joinCode}
-                    onChange={(e) => { setJoinCode(e.target.value.toUpperCase()); setJoinError(""); }}
-                    onKeyDown={(e) => e.key === "Enter" && joinRoom()} />
-                  <button style={S.joinBtn} onClick={joinRoom}>JOIN</button>
-                </div>
-              </div>
-              {joinError && <p style={S.errorHint}>{joinError}</p>}
-            </div>
-          )}
-
           {hostReady && (
             <div style={S.roomCodeBanner}>
               <div style={S.roomCodeLabel}>SHARE THIS ROOM CODE</div>
@@ -406,35 +387,56 @@ export default function MarchMadnessAuction() {
             </div>
           )}
 
-          {/* Settings + Start */}
-          <div style={{ ...S.setupCard, maxWidth: 720, marginBottom: 16 }}>
-            <div style={S.settingBlock}>
-              <span style={S.settingLabel}>BID LIMIT</span>
-              <div style={S.toggleRow}>
-                <button style={{ ...S.toggleBtn, ...(budgetMode === "unlimited" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("unlimited")}>
-                  <span style={S.toggleIcon}>♾️</span><span>No Limit</span></button>
-                <button style={{ ...S.toggleBtn, ...(budgetMode === "capped" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("capped")}>
-                  <span style={S.toggleIcon}>💰</span><span>Set Max Budget</span></button>
+          {/* Hosting Options + Join side by side */}
+          <div style={S.setupColumns}>
+            {/* Left: Hosting Options */}
+            <div style={S.setupCard}>
+              <h3 style={S.cardTitle}>🏠 HOSTING OPTIONS</h3>
+              <p style={S.cardSubtitle}>Configure and start your draft</p>
+              <div style={{ ...S.settingBlock, marginTop: 8 }}>
+                <span style={S.settingLabel}>BID LIMIT</span>
+                <div style={S.toggleRow}>
+                  <button style={{ ...S.toggleBtn, ...(budgetMode === "unlimited" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("unlimited")}>
+                    <span style={S.toggleIcon}>♾️</span><span>No Limit</span></button>
+                  <button style={{ ...S.toggleBtn, ...(budgetMode === "capped" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("capped")}>
+                    <span style={S.toggleIcon}>💰</span><span>Set Max Budget</span></button>
+                </div>
+                {budgetMode === "capped" && (
+                  <div style={S.budgetInputRow}><span style={S.budgetDollar}>$</span>
+                    <input style={S.budgetInputField} type="number" min={10} value={budgetAmount}
+                      onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) setBudgetAmount(v); }} />
+                    <span style={S.budgetPerDrafter}>per drafter</span></div>
+                )}
+                <p style={S.settingHint}>{budgetMode === "unlimited" ? "No spending cap." : `$${budgetAmount} per drafter across all 52 items.`}</p>
               </div>
-              {budgetMode === "capped" && (
-                <div style={S.budgetInputRow}><span style={S.budgetDollar}>$</span>
-                  <input style={S.budgetInputField} type="number" min={10} value={budgetAmount}
-                    onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) setBudgetAmount(v); }} />
-                  <span style={S.budgetPerDrafter}>per drafter</span></div>
-              )}
-              <p style={S.settingHint}>{budgetMode === "unlimited" ? "No spending cap." : `$${budgetAmount} per drafter across all 52 items.`}</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                {!isHost ? (<>
+                  <button style={{ ...S.startBtn, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                    onClick={startSolo} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
+                  <button style={{ ...S.startBtnLive, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                    onClick={startAsHost} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
+                </>) : (
+                  <button style={{ ...S.startBtn, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                    onClick={startDraft} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START THE DRAFT 🏀</button>
+                )}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              {!isHost ? (<>
-                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startSolo} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
-                <button style={{ ...S.startBtnLive, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startAsHost} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
-              </>) : (
-                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startDraft} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START THE DRAFT 🏀</button>
-              )}
-            </div>
+
+            {/* Right: Join a Live Draft */}
+            {!isHost && (
+              <div style={S.setupCard}>
+                <h3 style={S.cardTitle}>👀 JOIN A LIVE DRAFT</h3>
+                <p style={S.cardSubtitle}>Enter a room code to watch in real-time</p>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginTop: 20 }}>
+                  <input style={{ ...S.nameInput, width: "100%", maxWidth: 200, textAlign: "center", fontSize: 22, fontFamily: "'Oswald', sans-serif", fontWeight: 700, letterSpacing: 6, textTransform: "uppercase", padding: "12px 14px" }}
+                    placeholder="CODE" maxLength={6} value={joinCode}
+                    onChange={(e) => { setJoinCode(e.target.value.toUpperCase()); setJoinError(""); }}
+                    onKeyDown={(e) => e.key === "Enter" && joinRoom()} />
+                  <button style={{ ...S.joinBtn, width: "100%", maxWidth: 200, padding: "12px 20px" }} onClick={joinRoom}>JOIN DRAFT</button>
+                  {joinError && <p style={S.errorHint}>{joinError}</p>}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Drafters + Seed Names at bottom */}

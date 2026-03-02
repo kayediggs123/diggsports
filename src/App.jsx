@@ -82,12 +82,39 @@ const loadDraftLocal = () => {
 const clearSaveLocal = () => { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} };
 
 // ── Firebase helpers ──
+const toArray = (val) => {
+  if (Array.isArray(val)) return val;
+  if (val && typeof val === "object") return Object.values(val);
+  return [];
+};
+
 const serializeState = (state) => ({
-  ...state, drafters: state.drafters.map((d) => ({ ...d, budget: d.budget === Infinity ? -1 : d.budget })),
+  ...state,
+  drafters: (state.drafters || []).map((d) => ({
+    ...d,
+    budget: d.budget === Infinity ? -1 : d.budget,
+    items: d.items || [],
+  })),
+  availableItems: state.availableItems || [],
+  draftOrder: state.draftOrder || [],
+  log: state.log || [],
 });
+
 const deserializeState = (data) => {
   if (!data) return null;
-  return { ...data, drafters: (data.drafters || []).map((d) => ({ ...d, budget: d.budget === -1 ? Infinity : d.budget })), log: data.log || [], availableItems: data.availableItems || [], draftOrder: data.draftOrder || [] };
+  const drafters = toArray(data.drafters).map((d) => ({
+    ...d,
+    budget: d.budget === -1 ? Infinity : d.budget,
+    items: toArray(d.items),
+  }));
+  return {
+    ...data,
+    drafters,
+    log: toArray(data.log),
+    availableItems: toArray(data.availableItems),
+    draftOrder: toArray(data.draftOrder),
+    currentItem: data.currentItem || null,
+  };
 };
 const writeRoom = async (roomCode, state) => {
   try { await set(ref(db, `rooms/${roomCode}`), serializeState(state)); } catch (e) { console.error("Firebase write:", e); }
@@ -137,12 +164,22 @@ export default function MarchMadnessAuction() {
 
   // ── Apply remote state (viewer) ──
   const applyRemoteState = useCallback((data) => {
-    const state = deserializeState(data);
-    if (!state) return;
-    setPhase(state.phase); setDrafters(state.drafters); setAvailableItems(state.availableItems);
-    setDraftOrder(state.draftOrder); setDraftIndex(state.draftIndex); setCurrentItem(state.currentItem);
-    setLog(state.log); setBudgetMode(state.budgetMode || "unlimited"); setBudgetAmount(state.budgetAmount || 200);
-    if (state.phase === "done") setShowConfetti(true);
+    try {
+      const state = deserializeState(data);
+      if (!state) return;
+      setDrafters(state.drafters || []);
+      setAvailableItems(state.availableItems || []);
+      setDraftOrder(state.draftOrder || []);
+      setDraftIndex(state.draftIndex || 0);
+      setCurrentItem(state.currentItem || null);
+      setLog(state.log || []);
+      setBudgetMode(state.budgetMode || "unlimited");
+      setBudgetAmount(state.budgetAmount || 200);
+      setPhase(state.phase || "draft");
+      if (state.phase === "done") setShowConfetti(true);
+    } catch (e) {
+      console.error("Error applying remote state:", e);
+    }
   }, []);
 
   // ── Subscribe to room ──
@@ -161,11 +198,15 @@ export default function MarchMadnessAuction() {
     try {
       const snapshot = await get(ref(db, `rooms/${code}`));
       if (!snapshot.exists()) { setJoinError("Room not found. Check the code."); return; }
-      setRoomCode(code); setRole("viewer");
+      setRoomCode(code);
+      setRole("viewer");
+      // Apply initial state then subscribe for live updates
       applyRemoteState(snapshot.val());
-      setPhase(snapshot.val().phase || "draft");
       subscribeToRoom(code);
-    } catch (e) { setJoinError("Connection error. Try again."); }
+    } catch (e) {
+      console.error("Join error:", e);
+      setJoinError("Connection error. Try again.");
+    }
   };
 
   // ── Save helper ──
@@ -307,7 +348,7 @@ export default function MarchMadnessAuction() {
     </div>);
   };
 
-  const totalSpent = (d) => d.items.reduce((s, i) => s + i.price, 0);
+  const totalSpent = (d) => (d.items || []).reduce((s, i) => s + (i.price || 0), 0);
   const seedKeys = [...Array.from({ length: 12 }, (_, i) => i + 1), "13-16"];
   const regionAvailable = (region) => availableItems.filter((i) => i.region === region);
   const totalLeft = availableItems.length;
@@ -762,4 +803,3 @@ const S = {
   resultSeedBadge: { padding: "2px 8px", borderRadius: 4, color: "#fff", fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: 1 },
   resultPrice: { fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, color: "#4ADE80" },
 };
-

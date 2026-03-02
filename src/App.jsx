@@ -235,6 +235,8 @@ export default function MarchMadnessAuction() {
 
   const confirmSale = () => {
     if (isViewer) return;
+    // TEST mode: randomize all remaining picks
+    if (winningBid.toUpperCase() === "TEST") { randomizeRemainder(); return; }
     const amount = parseInt(winningBid);
     if (selectedWinner === null || isNaN(amount) || amount < 1) return;
     if (hasBudget && amount > drafters[selectedWinner].budget) return;
@@ -245,6 +247,42 @@ export default function MarchMadnessAuction() {
     const saleLog = [...log, `✅ [${currentItem.region}] ${currentItem.label} → ${winner.name} for $${amount}!`];
     setLog(saleLog);
     advanceToNext(draftIndex + 1, draftOrder, updatedAvailable, saleLog, updatedDrafters);
+  };
+
+  const randomizeRemainder = () => {
+    if (isViewer) return;
+    let curDrafters = drafters.map((d) => ({ ...d, items: [...d.items], budget: d.budget }));
+    let curAvail = [...availableItems];
+    let curLog = [...log, "🎲 TEST MODE — randomizing all remaining picks!"];
+    const remaining = draftOrder.slice(draftIndex);
+
+    remaining.forEach((item) => {
+      // Pick a random drafter who can afford at least $1
+      const eligible = curDrafters.filter((d) => !hasBudget || d.budget >= 1);
+      if (eligible.length === 0) return;
+      const winner = eligible[Math.floor(Math.random() * eligible.length)];
+      const winnerIdx = curDrafters.findIndex((d) => d.name === winner.name);
+
+      // Random bid: $1 to $20 (or max budget if capped)
+      const maxBid = hasBudget ? Math.min(winner.budget, 20) : 20;
+      const bid = Math.max(1, Math.floor(Math.random() * maxBid) + 1);
+
+      curDrafters = curDrafters.map((d, i) => i === winnerIdx
+        ? { ...d, budget: hasBudget ? d.budget - bid : d.budget, items: [...d.items, { ...item, price: bid }] }
+        : d
+      );
+      curAvail = curAvail.filter((a) => a.id !== item.id);
+      curLog.push(`✅ [${item.region}] ${item.label} → ${winner.name} for $${bid}!`);
+    });
+
+    curLog.push("🏆 ALL ITEMS DRAFTED! The auction is complete!");
+    setDrafters(curDrafters);
+    setAvailableItems(curAvail);
+    setLog(curLog);
+    setPhase("done");
+    setShowConfetti(true);
+    setCurrentItem(null);
+    saveState({ phase: "done", drafters: curDrafters, availableItems: curAvail, draftOrder, draftIndex: draftOrder.length, currentItem: null, log: curLog, budgetMode, budgetAmount });
   };
 
   const cancelAuction = () => {
@@ -1095,19 +1133,18 @@ export default function MarchMadnessAuction() {
                 <div style={S.fieldBlock}>
                   <label style={S.fieldLabel}>WINNING BID</label>
                   <div style={S.bidInputRow}><span style={S.bidDollar}>$</span>
-                    <input style={S.bidAmountInput} type="number" min={1}
-                      max={hasBudget && selectedWinner !== null ? drafters[selectedWinner].budget : undefined}
+                    <input style={S.bidAmountInput} type="text"
                       placeholder="Amount" value={winningBid}
                       onChange={(e) => setWinningBid(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && confirmSale()} />
                   </div>
-                  {hasBudget && selectedWinner !== null && parseInt(winningBid) > drafters[selectedWinner].budget && (
+                  {hasBudget && selectedWinner !== null && parseInt(winningBid) > drafters[selectedWinner].budget && winningBid.toUpperCase() !== "TEST" && (
                     <p style={S.errorHint}>Exceeds {drafters[selectedWinner].name}'s budget</p>
                   )}
                 </div>
                 <div style={S.auctionActions}>
-                  <button style={{ ...S.soldBtn, opacity: selectedWinner !== null && winningBid && parseInt(winningBid) >= 1 && (!hasBudget || parseInt(winningBid) <= drafters[selectedWinner]?.budget) ? 1 : 0.3 }}
-                    onClick={confirmSale} disabled={selectedWinner === null || !winningBid || parseInt(winningBid) < 1 || (hasBudget && parseInt(winningBid) > (drafters[selectedWinner]?.budget || 0))}>
+                  <button style={{ ...S.soldBtn, opacity: (winningBid.toUpperCase() === "TEST") || (selectedWinner !== null && winningBid && parseInt(winningBid) >= 1 && (!hasBudget || parseInt(winningBid) <= drafters[selectedWinner]?.budget)) ? 1 : 0.3 }}
+                    onClick={confirmSale} disabled={winningBid.toUpperCase() !== "TEST" && (selectedWinner === null || !winningBid || parseInt(winningBid) < 1 || (hasBudget && parseInt(winningBid) > (drafters[selectedWinner]?.budget || 0)))}>
                     🔨 CONFIRM SALE</button>
                   <button style={S.cancelBtn} onClick={cancelAuction}>Skip</button>
                 </div>

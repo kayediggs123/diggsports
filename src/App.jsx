@@ -146,6 +146,12 @@ export default function MarchMadnessAuction() {
   const [roomCode, setRoomCode] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
+  // Drag & drop state
+  const [dragItem, setDragItem] = useState(null); // { drafterIdx, itemIdx, item }
+  const [dragOverDrafter, setDragOverDrafter] = useState(null);
+  // Edit price state
+  const [editingPrice, setEditingPrice] = useState(null); // { drafterIdx, itemIdx }
+  const [editPriceValue, setEditPriceValue] = useState("");
   const logRef = useRef(null);
   const listenerRef = useRef(null);
 
@@ -340,6 +346,74 @@ export default function MarchMadnessAuction() {
     setDraftIndex(0); setCurrentItem(null); setLog([]); setShowConfetti(false);
     setHasSavedDraft(false); setRole(null); setRoomCode(""); setJoinCode("");
   };
+
+  // ── Drag & Drop: move team between drafters ──
+  const handleDragStart = (drafterIdx, itemIdx, item) => {
+    if (isViewer) return;
+    setDragItem({ drafterIdx, itemIdx, item });
+  };
+
+  const handleDragOver = (e, drafterIdx) => {
+    e.preventDefault();
+    setDragOverDrafter(drafterIdx);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverDrafter(null);
+  };
+
+  const handleDrop = (e, toDrafterIdx) => {
+    e.preventDefault();
+    setDragOverDrafter(null);
+    if (!dragItem || dragItem.drafterIdx === toDrafterIdx) { setDragItem(null); return; }
+    const updated = drafters.map((d, i) => {
+      if (i === dragItem.drafterIdx) {
+        const newItems = [...d.items];
+        newItems.splice(dragItem.itemIdx, 1);
+        return { ...d, items: newItems, budget: hasBudget ? d.budget + dragItem.item.price : d.budget };
+      }
+      if (i === toDrafterIdx) {
+        return { ...d, items: [...d.items, dragItem.item], budget: hasBudget ? d.budget - dragItem.item.price : d.budget };
+      }
+      return d;
+    });
+    setDrafters(updated);
+    const moveLog = [...log, `🔄 ${dragItem.item.label} moved from ${drafters[dragItem.drafterIdx].name} to ${drafters[toDrafterIdx].name}`];
+    setLog(moveLog);
+    saveState({ phase, drafters: updated, availableItems, draftOrder, draftIndex, currentItem, log: moveLog, budgetMode, budgetAmount });
+    setDragItem(null);
+  };
+
+  // ── Edit price ──
+  const startEditPrice = (drafterIdx, itemIdx, currentPrice) => {
+    if (isViewer) return;
+    setEditingPrice({ drafterIdx, itemIdx });
+    setEditPriceValue(String(currentPrice));
+  };
+
+  const confirmEditPrice = () => {
+    if (!editingPrice) return;
+    const newPrice = parseInt(editPriceValue);
+    if (isNaN(newPrice) || newPrice < 0) { setEditingPrice(null); return; }
+    const { drafterIdx, itemIdx } = editingPrice;
+    const oldPrice = drafters[drafterIdx].items[itemIdx].price;
+    const diff = newPrice - oldPrice;
+    const updated = drafters.map((d, i) => {
+      if (i === drafterIdx) {
+        const newItems = [...d.items];
+        newItems[itemIdx] = { ...newItems[itemIdx], price: newPrice };
+        return { ...d, items: newItems, budget: hasBudget ? d.budget - diff : d.budget };
+      }
+      return d;
+    });
+    setDrafters(updated);
+    const editLog = [...log, `✏️ ${drafters[drafterIdx].items[itemIdx].label} price changed: $${oldPrice} → $${newPrice}`];
+    setLog(editLog);
+    saveState({ phase, drafters: updated, availableItems, draftOrder, draftIndex, currentItem, log: editLog, budgetMode, budgetAmount });
+    setEditingPrice(null);
+  };
+
+  const cancelEditPrice = () => { setEditingPrice(null); setEditPriceValue(""); };
 
   const Confetti = () => {
     const ps = Array.from({ length: 80 }, (_, i) => ({ id: i, left: Math.random() * 100, delay: Math.random() * 2, duration: 2 + Math.random() * 2, color: COLORS[i % COLORS.length], size: 6 + Math.random() * 8 }));
@@ -618,30 +692,76 @@ export default function MarchMadnessAuction() {
           <button style={S.resetBtn} onClick={resetDraft}>🗑️ New Draft</button>
         </div>
         <div style={S.resultsGrid}>
-          {drafters.map((d, i) => (
-            <div key={i} style={{ ...S.resultCard, borderTop: `4px solid ${d.color}` }}>
+          {drafters.map((d, i) => {
+            const isDragOver = dragOverDrafter === i && dragItem && dragItem.drafterIdx !== i;
+            return (
+            <div key={i}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, i)}
+              style={{
+                ...S.resultCard,
+                borderTop: `4px solid ${d.color}`,
+                outline: isDragOver ? `2px dashed ${d.color}` : "none",
+                background: isDragOver ? `${d.color}10` : S.resultCard.background,
+                transition: "all 0.15s ease",
+              }}>
               <div style={S.resultHeader}>
                 <span style={S.resultName}>{d.name}</span>
                 <span style={{ ...S.resultSpent, color: d.color }}>${totalSpent(d)}</span>
               </div>
               {hasBudget && <div style={S.resultBudgetLeft}>${d.budget} remaining</div>}
-              {d.items.length === 0 ? <p style={S.noItems}>No teams yet</p> : (
+              {(d.items || []).length === 0 ? <p style={S.noItems}>{isDragOver ? "Drop here!" : "No teams yet"}</p> : (
                 <div style={S.resultItemList}>
                   {REGIONS.map((region) => {
-                    const ri = d.items.filter((item) => item.region === region);
+                    const ri = (d.items || []).filter((item) => item.region === region);
                     if (!ri.length) return null;
                     return (<div key={region}>
                       <div style={{ ...S.resultRegionLabel, color: REGION_COLORS[region] }}>{region}</div>
-                      {ri.map((item, j) => (<div key={j} style={S.resultItem}>
-                        <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[item.seed] }}>{item.shortLabel}</span>
-                        <span style={S.resultPrice}>${item.price}</span>
-                      </div>))}
+                      {ri.map((item, j) => {
+                        const globalIdx = d.items.indexOf(item);
+                        const isEditing = editingPrice && editingPrice.drafterIdx === i && editingPrice.itemIdx === globalIdx;
+                        return (<div key={j}
+                          draggable={!isViewer}
+                          onDragStart={() => handleDragStart(i, globalIdx, item)}
+                          style={{
+                            ...S.resultItem,
+                            cursor: isViewer ? "default" : "grab",
+                            opacity: dragItem && dragItem.drafterIdx === i && dragItem.itemIdx === globalIdx ? 0.3 : 1,
+                            borderRadius: 5,
+                            padding: "3px 4px",
+                            marginLeft: -4,
+                            marginRight: -4,
+                          }}>
+                          <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[item.seed] }}>{item.shortLabel}</span>
+                          {isEditing ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 700 }}>$</span>
+                              <input
+                                autoFocus
+                                style={S.editPriceInput}
+                                type="number" min={0}
+                                value={editPriceValue}
+                                onChange={(e) => setEditPriceValue(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") confirmEditPrice(); if (e.key === "Escape") cancelEditPrice(); }}
+                                onBlur={confirmEditPrice}
+                              />
+                            </div>
+                          ) : (
+                            <span
+                              style={{ ...S.resultPrice, cursor: isViewer ? "default" : "pointer" }}
+                              onClick={() => !isViewer && startEditPrice(i, globalIdx, item.price)}
+                              title={isViewer ? "" : "Click to edit price"}
+                            >${item.price}</span>
+                          )}
+                        </div>);
+                      })}
                     </div>);
                   })}
                 </div>
               )}
             </div>
-          ))}
+          );})}
         </div>
       </div>
 
@@ -973,6 +1093,7 @@ const S = {
   resultItem: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   resultSeedBadge: { padding: "2px 8px", borderRadius: 4, color: "#fff", fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: 1 },
   resultPrice: { fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, color: "#4ADE80" },
+  editPriceInput: { width: 60, padding: "2px 6px", borderRadius: 4, border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.1)", color: "#4ADE80", fontSize: 13, fontFamily: "'Oswald', sans-serif", fontWeight: 700, textAlign: "right" },
   // Stats
   statsSection: { padding: "28px 24px", borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)" },
   statsSectionTitle: { fontFamily: "'Oswald', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: 4, marginBottom: 18 },
@@ -989,4 +1110,3 @@ const S = {
   statsRow: { display: "flex", alignItems: "center", padding: "9px 14px", borderBottom: "1px solid rgba(255,255,255,0.03)" },
   statsCell: { fontFamily: "'Oswald', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8e6e1", width: 70, textAlign: "right", flexShrink: 0 },
 };
-

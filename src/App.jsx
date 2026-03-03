@@ -426,8 +426,8 @@ export default function MarchMadnessAuction() {
         <div style={S.setupContainer}>
           <div style={S.logoArea}>
             <div style={S.basketballIcon}>🏀</div>
-            <h1 style={S.mainTitle}>MARCH MADNESS</h1>
-            <h2 style={S.subtitle}>CALCUTTA</h2>
+            <h1 className="mm-logo-title" style={S.mainTitle}>MARCH MADNESS</h1>
+            <h2 className="mm-logo-subtitle" style={S.subtitle}>CALCUTTA</h2>
             <p style={S.tagline}>4 Regions · Seeds 1–12 individual · Seeds 13–16 grouped · 52 total items</p>
           </div>
 
@@ -441,8 +441,7 @@ export default function MarchMadnessAuction() {
             </div>
           )}
 
-          <div style={S.setupColumns}>
-            {/* Left: Host a Draft */}
+          <div className="mm-landing-cols" style={S.setupColumns}>
             <div style={S.setupCard}>
               <h3 style={S.cardTitle}>🏠 HOST A DRAFT</h3>
               <p style={S.cardSubtitle}>Set up and run a Calcutta draft</p>
@@ -487,7 +486,7 @@ export default function MarchMadnessAuction() {
           </div>
 
           {/* Drafters + Seed Names + Bid Limit */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, width: "100%", maxWidth: 900 }}>
+          <div className="mm-config-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, width: "100%", maxWidth: 900 }}>
             <div style={S.setupCard}>
               <h3 style={S.cardTitle}>DRAFTERS</h3>
               <p style={S.cardSubtitle}>{drafterNames.length} / 20</p>
@@ -546,7 +545,7 @@ export default function MarchMadnessAuction() {
           </div>
 
           {/* Start Draft */}
-          <div style={{ ...S.setupCard, maxWidth: 900, marginTop: 16 }}>
+          <div className="mm-config-start" style={{ ...S.setupCard, maxWidth: 900, marginTop: 16 }}>
             {hostReady && (
               <div style={{ marginBottom: 16 }}>
                 <div style={S.roomCodeBannerInline}>
@@ -557,7 +556,7 @@ export default function MarchMadnessAuction() {
               </div>
             )}
             {!isHost ? (
-              <div style={S.setupColumns}>
+              <div className="mm-setup-cols" style={S.setupColumns}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
                   <button style={{ ...S.startBtn, width: "100%", opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
                     onClick={() => { startSolo(); startDraft(); }} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
@@ -850,12 +849,12 @@ export default function MarchMadnessAuction() {
     return (
       <div style={S.page}><style>{globalCSS}</style>
 
-        <div style={S.header}>
+        <div className="mm-header" style={S.header}>
           <span style={S.headerIcon}>🏆</span>
           <h1 style={S.headerTitle}>DRAFT COMPLETE</h1>
           {isLive && <span style={S.liveBadge}>{isHost ? `📡 ${roomCode}` : `👀 ${roomCode}`}</span>}
           <span style={{ ...S.headerBadge, background: "rgba(233,196,106,0.15)", color: "#E9C46A" }}>Pot: ${totalPot}</span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="mm-header-actions" style={{ display: "flex", gap: 8 }}>
             <button style={S.copyBtn} onClick={copyResults}>{copied ? "✓ Copied!" : "📋 Copy"}</button>
             <button style={S.downloadBtn} onClick={downloadExcel}>📥 Excel</button>
             <button style={S.resetBtn} onClick={resetDraft}>🗑️ New Draft</button>
@@ -863,7 +862,7 @@ export default function MarchMadnessAuction() {
         </div>
 
         {/* Tab bar */}
-        <div style={S.doneTabBar}>
+        <div className="mm-done-tabs" style={S.doneTabBar}>
           {[{ key: "bracket", label: "🏆 BRACKET" }, { key: "list", label: "📋 RESULTS" }, { key: "payouts", label: "💰 PAYOUTS" }, { key: "stats", label: "📊 STATS" }].map((t) => (
             <button key={t.key}
               style={{ ...S.doneTabBtn, ...(doneTab === t.key ? S.doneTabBtnActive : {}) }}
@@ -875,7 +874,7 @@ export default function MarchMadnessAuction() {
         {doneTab === "bracket" && (
           <div style={{ padding: "20px 16px", overflowX: "auto" }}>
             <p style={{ fontSize: 12, color: "#5a6478", marginBottom: 12, textAlign: "center" }}>Click a team to advance them through the bracket</p>
-            <div style={{ minWidth: 1100, display: "flex", flexDirection: "column", gap: 0 }}>
+            <div className="mm-bracket-wrap" style={{ minWidth: 1100, display: "flex", flexDirection: "column", gap: 0 }}>
 
               {/* Top: East → FF → Midwest */}
               <div style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
@@ -964,7 +963,7 @@ export default function MarchMadnessAuction() {
           <div style={S.statsSection}>
             <div style={{ marginBottom: 20 }}>
               <h4 style={S.statsSubTitle}>PAYOUT STRUCTURE</h4>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+              <div className="mm-payout-cards" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
                 {PAYOUT_ROUNDS.map((pr, i) => {
                   const roundPool = totalPot * pr.pct;
                   const perWin = roundPool / pr.winners;
@@ -989,7 +988,7 @@ export default function MarchMadnessAuction() {
 
             <h4 style={S.statsSubTitle}>PROJECTED PAYOUTS BY DRAFTER</h4>
             <p style={{ fontSize: 11, color: "#3e4a5e", marginBottom: 10 }}>Click a drafter row to see team-level breakdown</p>
-            <div style={S.statsTable}>
+            <div className="mm-stats-table" style={S.statsTable}>
               <div style={S.statsHeaderRow}>
                 <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Drafter</span>
                 <span style={S.statsHeaderCell}>Spent</span>
@@ -1081,7 +1080,7 @@ export default function MarchMadnessAuction() {
         {/* LIST TAB */}
         {doneTab === "list" && (
           <div style={S.resultsSection}>
-            <div style={S.resultsGrid}>
+            <div className="mm-results-grid" style={S.resultsGrid}>
               {drafters.map((d, i) => {
                 const isDragOver = dragOverDrafter === i && dragItem && dragItem.drafterIdx !== i;
                 return (
@@ -1152,7 +1151,7 @@ export default function MarchMadnessAuction() {
         {/* STATS TAB */}
         {doneTab === "stats" && (
           <div style={S.statsSection}>
-            <div style={S.statsOverview}>
+            <div className="mm-stats-overview" style={S.statsOverview}>
               <div style={S.statCard}><div style={S.statValue}>${overallTotal}</div><div style={S.statLabel}>TOTAL SPENT</div></div>
               <div style={S.statCard}><div style={S.statValue}>${overallAvg}</div><div style={S.statLabel}>AVG BID</div></div>
               <div style={S.statCard}><div style={{ ...S.statValue, color: "#4ADE80" }}>${overallMax}</div><div style={S.statLabel}>HIGHEST BID</div>{maxPick && <div style={S.statDetail}>{maxPick.shortLabel} ({maxPick.region}) → {maxPick.drafter}</div>}</div>
@@ -1162,7 +1161,7 @@ export default function MarchMadnessAuction() {
             {/* By Seed */}
             <div style={S.statsTableContainer}>
               <h4 style={S.statsSubTitle}>BY SEED</h4>
-              <div style={S.statsTable}>
+              <div className="mm-stats-table" style={S.statsTable}>
                 <div style={S.statsHeaderRow}><span style={{ ...S.statsHeaderCell, flex: 1 }}>Seed</span><span style={S.statsHeaderCell}>Picks</span><span style={S.statsHeaderCell}>Avg</span><span style={S.statsHeaderCell}>Max</span><span style={S.statsHeaderCell}>Min</span><span style={S.statsHeaderCell}>Total</span></div>
                 {seedStats.map((s) => (<div key={s.seed} style={S.statsRow}>
                   <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}><span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[s.seed] }}>{s.seed === "13-16" ? "13-16" : `#${s.seed}`}</span></span>
@@ -1174,7 +1173,7 @@ export default function MarchMadnessAuction() {
             {/* By Region */}
             <div style={S.statsTableContainer}>
               <h4 style={S.statsSubTitle}>BY REGION</h4>
-              <div style={S.statsTable}>
+              <div className="mm-stats-table" style={S.statsTable}>
                 <div style={S.statsHeaderRow}><span style={{ ...S.statsHeaderCell, flex: 1 }}>Region</span><span style={S.statsHeaderCell}>Picks</span><span style={S.statsHeaderCell}>Avg</span><span style={S.statsHeaderCell}>Max</span><span style={S.statsHeaderCell}>Min</span><span style={S.statsHeaderCell}>Total</span></div>
                 {regionStats.map((r) => (<div key={r.region} style={S.statsRow}>
                   <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: REGION_COLORS[r.region] }}></div><span style={{ fontWeight: 600 }}>{r.region}</span></span>
@@ -1186,7 +1185,7 @@ export default function MarchMadnessAuction() {
             {/* By Drafter */}
             <div style={S.statsTableContainer}>
               <h4 style={S.statsSubTitle}>BY DRAFTER</h4>
-              <div style={S.statsTable}>
+              <div className="mm-stats-table" style={S.statsTable}>
                 <div style={S.statsHeaderRow}><span style={{ ...S.statsHeaderCell, flex: 1 }}>Drafter</span><span style={S.statsHeaderCell}>Teams</span><span style={S.statsHeaderCell}>Avg</span><span style={S.statsHeaderCell}>Max</span><span style={S.statsHeaderCell}>Min</span><span style={S.statsHeaderCell}>Total</span></div>
                 {drafterStats.map((d) => (<div key={d.name} style={S.statsRow}>
                   <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.color }}></div><span style={{ fontWeight: 600 }}>{d.name}</span></span>
@@ -1206,7 +1205,7 @@ export default function MarchMadnessAuction() {
   return (
     <div style={S.page}><style>{globalCSS}</style>
 
-      <div style={S.header}>
+      <div className="mm-header" style={S.header}>
         <span style={S.headerIcon}>🏀</span>
         <h1 style={S.headerTitle}>MARCH MADNESS AUCTION</h1>
         {isLive && <span style={S.liveBadge}>{isHost ? `📡 HOSTING · ${roomCode}` : `👀 VIEWING · ${roomCode}`}</span>}
@@ -1219,11 +1218,11 @@ export default function MarchMadnessAuction() {
         <div style={S.viewerBanner}><span style={{ fontSize: 16 }}>👀</span><span>You're watching live — results update automatically</span></div>
       )}
 
-      <div style={S.draftLayout}>
+      <div className="mm-draft-layout" style={S.draftLayout}>
         {/* Left: Draft Order */}
-        <div style={S.leftPanel}>
+        <div className="mm-draft-left" style={S.leftPanel}>
           <h3 style={S.panelTitle}>DRAFT ORDER</h3>
-          <div style={S.seedList}>
+          <div className="mm-seed-list" style={S.seedList}>
             {draftOrder.slice(draftIndex).map((item, idx) => {
               const cur = idx === 0;
               const drafted = !availableItems.find((a) => a.id === item.id);
@@ -1260,12 +1259,12 @@ export default function MarchMadnessAuction() {
                 <div style={S.auctionLabel}>{isViewer ? "CURRENT AUCTION" : "RECORD RESULT"}</div>
                 <span style={{ ...S.regionPill, backgroundColor: REGION_COLORS[currentItem.region] }}>{currentItem.region}</span>
               </div>
-              <div style={{ ...S.auctionSeed, backgroundColor: SEED_COLORS[currentItem.seed] }}>{currentItem.label}</div>
+              <div className="mm-auction-seed" style={{ ...S.auctionSeed, backgroundColor: SEED_COLORS[currentItem.seed] }}>{currentItem.label}</div>
 
               {!isViewer && (<>
                 <div style={S.fieldBlock}>
                   <label style={S.fieldLabel}>WHO WON?</label>
-                  <div style={S.winnerGrid}>
+                  <div className="mm-winner-grid" style={S.winnerGrid}>
                     {drafters.map((d, i) => {
                       const sel = selectedWinner === i, broke = hasBudget && d.budget < 1;
                       return (<button key={i} disabled={broke} style={{ ...S.winnerBtn, borderColor: sel ? d.color : "rgba(255,255,255,0.08)", background: sel ? `${d.color}20` : "rgba(255,255,255,0.03)", color: sel ? d.color : broke ? "#2a2e3a" : "#8b98b0", boxShadow: sel ? `0 0 12px ${d.color}30` : "none", cursor: broke ? "default" : "pointer" }}
@@ -1307,7 +1306,7 @@ export default function MarchMadnessAuction() {
         </div>
 
         {/* Right: Activity Log */}
-        <div style={S.rightPanel}>
+        <div className="mm-draft-right" style={S.rightPanel}>
           <h3 style={S.panelTitle}>ACTIVITY LOG</h3>
           <div ref={logRef} style={S.rightLogScroll}>
             {log.map((entry, i) => (
@@ -1320,7 +1319,7 @@ export default function MarchMadnessAuction() {
       {/* Bottom: Results during draft */}
       <div style={S.resultsSection}>
         <h3 style={S.resultsSectionTitle}>📋 DRAFT RESULTS</h3>
-        <div style={S.resultsGrid}>
+        <div className="mm-results-grid" style={S.resultsGrid}>
           {drafters.map((d, i) => {
             const isDragOver = dragOverDrafter === i && dragItem && dragItem.drafterIdx !== i;
             return (
@@ -1382,6 +1381,35 @@ const globalCSS = `
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes slideDown { 0% { opacity: 0; max-height: 0; } 100% { opacity: 1; max-height: 80px; } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .mm-landing-cols, .mm-config-cols, .mm-config-start, .mm-setup-cols { grid-template-columns: 1fr !important; max-width: 100% !important; }
+    .mm-draft-layout { grid-template-columns: 1fr !important; min-height: auto !important; }
+    .mm-draft-left, .mm-draft-right { border-right: none !important; border-left: none !important; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .mm-draft-left .mm-seed-list { max-height: 200px !important; }
+    .mm-header { flex-wrap: wrap; gap: 8px !important; padding: 10px 14px !important; }
+    .mm-header h1 { font-size: 14px !important; letter-spacing: 2px !important; }
+    .mm-winner-grid { grid-template-columns: 1fr !important; }
+    .mm-results-grid { grid-template-columns: 1fr !important; }
+    .mm-stats-overview { grid-template-columns: 1fr 1fr !important; }
+    .mm-stats-table { font-size: 11px; }
+    .mm-stats-table .mm-stats-cell { width: auto !important; min-width: 50px; font-size: 11px !important; }
+    .mm-payout-cards { flex-direction: column !important; }
+    .mm-payout-cards > div { min-width: 0 !important; }
+    .mm-done-tabs { gap: 4px !important; }
+    .mm-done-tabs button { font-size: 11px !important; padding: 8px 10px !important; letter-spacing: 1px !important; }
+    .mm-bracket-wrap { min-width: 800px !important; }
+    .mm-logo-title { font-size: 32px !important; letter-spacing: 3px !important; }
+    .mm-logo-subtitle { font-size: 16px !important; letter-spacing: 5px !important; }
+    .mm-auction-seed { font-size: 16px !important; padding: 8px 16px !important; }
+  }
+  @media (max-width: 480px) {
+    .mm-stats-overview { grid-template-columns: 1fr !important; }
+    .mm-header-actions { flex-wrap: wrap; gap: 6px !important; }
+    .mm-header-actions button { font-size: 11px !important; padding: 6px 10px !important; }
+    .mm-logo-title { font-size: 26px !important; }
+  }
 `;
 
 const S = {
@@ -1412,7 +1440,7 @@ const S = {
   nameRow: { display: "flex", alignItems: "center", gap: 8 },
   nameNumber: { width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 11, flexShrink: 0 },
   seedTag: { padding: "3px 8px", borderRadius: 5, color: "#fff", fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 10, letterSpacing: 1, flexShrink: 0, textAlign: "center", minWidth: 38 },
-  nameInput: { flex: 1, padding: "7px 10px", borderRadius: 7, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "#e8e6e1", fontSize: 13, fontFamily: "'Source Sans 3', sans-serif" },
+  nameInput: { flex: 1, padding: "9px 10px", borderRadius: 7, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "#e8e6e1", fontSize: 14, fontFamily: "'Source Sans 3', sans-serif", minHeight: 40 },
   removeBtn: { width: 24, height: 24, borderRadius: "50%", border: "none", background: "rgba(230,57,70,0.2)", color: "#E63946", cursor: "pointer", fontWeight: 700, fontSize: 11, flexShrink: 0 },
   addBtn: { marginTop: 8, padding: "7px 0", width: "100%", borderRadius: 7, border: "1px dashed rgba(255,255,255,0.15)", background: "transparent", color: "#5a6478", cursor: "pointer", fontSize: 12, fontWeight: 600 },
   regionTabs: { display: "flex", gap: 0, marginBottom: 10 },
@@ -1459,7 +1487,7 @@ const S = {
   fieldBlock: { marginBottom: 18 },
   fieldLabel: { fontFamily: "'Oswald', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: 3, color: "#5a6478", display: "block", marginBottom: 8 },
   winnerGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 },
-  winnerBtn: { display: "flex", alignItems: "center", gap: 8, padding: "9px 11px", borderRadius: 8, border: "1px solid", cursor: "pointer", fontFamily: "'Source Sans 3', sans-serif" },
+  winnerBtn: { display: "flex", alignItems: "center", gap: 8, padding: "11px 12px", borderRadius: 8, border: "1px solid", cursor: "pointer", fontFamily: "'Source Sans 3', sans-serif", minHeight: 44 },
   winnerDot: { width: 10, height: 10, borderRadius: "50%", flexShrink: 0 },
   winnerName: { fontSize: 13, fontWeight: 600, flex: 1 },
   winnerBudget: { fontSize: 11, color: "#5a6478" },
@@ -1531,3 +1559,4 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
+

@@ -31,12 +31,12 @@ const SAVE_KEY = "mm-auction-draft-save";
 
 // Payout percentages by round
 const PAYOUT_ROUNDS = [
-  { name: "Round of 32", pct: 0.14 },
-  { name: "Sweet 16", pct: 0.14 },
-  { name: "Elite 8", pct: 0.17 },
-  { name: "Final Four", pct: 0.20 },
-  { name: "Championship Game", pct: 0.20 },
-  { name: "Champion", pct: 0.15 },
+  { name: "Round of 32", pct: 0.14, winners: 32 },
+  { name: "Sweet 16", pct: 0.14, winners: 16 },
+  { name: "Elite 8", pct: 0.17, winners: 8 },
+  { name: "Final Four", pct: 0.20, winners: 4 },
+  { name: "Championship Game", pct: 0.20, winners: 2 },
+  { name: "Champion", pct: 0.15, winners: 1 },
 ];
 
 const buildDefaultSeedNames = () => {
@@ -947,13 +947,19 @@ export default function MarchMadnessAuction() {
             <div style={{ marginBottom: 20 }}>
               <h4 style={S.statsSubTitle}>PAYOUT STRUCTURE</h4>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-                {PAYOUT_ROUNDS.map((pr, i) => (
-                  <div key={i} style={{ ...S.statCard, flex: "1 1 140px", minWidth: 140 }}>
-                    <div style={{ ...S.statValue, fontSize: 20 }}>{Math.round(pr.pct * 100)}%</div>
-                    <div style={S.statLabel}>{pr.name.toUpperCase()}</div>
-                    <div style={{ ...S.statDetail, color: "#4ADE80" }}>${(totalPot * pr.pct).toFixed(0)}</div>
-                  </div>
-                ))}
+                {PAYOUT_ROUNDS.map((pr, i) => {
+                  const roundPool = totalPot * pr.pct;
+                  const perWin = roundPool / pr.winners;
+                  return (
+                    <div key={i} style={{ ...S.statCard, flex: "1 1 140px", minWidth: 140 }}>
+                      <div style={{ ...S.statValue, fontSize: 20 }}>{Math.round(pr.pct * 100)}%</div>
+                      <div style={S.statLabel}>{pr.name.toUpperCase()}</div>
+                      <div style={{ ...S.statDetail, color: "#4ADE80" }}>${roundPool.toFixed(0)} pool</div>
+                      <div style={{ ...S.statDetail, color: "#E9C46A", marginTop: 2 }}>${perWin.toFixed(2)} per win</div>
+                      <div style={{ fontSize: 10, color: "#3e4a5e", marginTop: 2 }}>{pr.winners} team{pr.winners > 1 ? "s" : ""}</div>
+                    </div>
+                  );
+                })}
               </div>
               <div style={{ ...S.statCard, textAlign: "center", marginBottom: 20 }}>
                 <div style={{ ...S.statValue, fontSize: 32, color: "#E9C46A" }}>${totalPot}</div>
@@ -1497,3 +1503,4 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
+

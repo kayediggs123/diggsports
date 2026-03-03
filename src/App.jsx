@@ -42,7 +42,7 @@ const PAYOUT_ROUNDS = [
 
 const buildDefaultSeedNames = () => {
   const n = {};
-  REGIONS.forEach((r) => { for (let s = 1; s <= 12; s++) n[`${r}-${s}`] = ""; n[`${r}-13-16`] = ""; });
+  REGIONS.forEach((r) => { for (let s = 1; s <= 16; s++) n[`${r}-${s}`] = ""; n[`${r}-13-16`] = ""; });
   return n;
 };
 
@@ -53,8 +53,11 @@ const buildItems = (seedNames) => {
       const name = seedNames[`${region}-${s}`]?.trim();
       list.push({ id: `${region}-${s}`, seed: s, region, label: name ? `#${s} ${name}` : `#${s} Seed`, shortLabel: name || `#${s}`, type: "single" });
     }
+    // Group 13-16: collect individual names for bracket display, use group name for draft label
     const gn = seedNames[`${region}-13-16`]?.trim();
-    list.push({ id: `${region}-13-16`, seed: "13-16", region, label: gn ? `13-16 ${gn}` : "13-16 Seeds", shortLabel: gn || "13-16", type: "group" });
+    const names1316 = {};
+    for (let s = 13; s <= 16; s++) names1316[s] = seedNames[`${region}-${s}`]?.trim() || "";
+    list.push({ id: `${region}-13-16`, seed: "13-16", region, label: gn ? `13-16 ${gn}` : "13-16 Seeds", shortLabel: gn || "13-16", type: "group", seedNames: names1316 });
   });
   return list;
 };
@@ -414,7 +417,7 @@ export default function MarchMadnessAuction() {
     return `#${seed}`;
   };
 
-  const seedKeys = [...Array.from({ length: 12 }, (_, i) => i + 1), "13-16"];
+  const seedKeys = Array.from({ length: 16 }, (_, i) => i + 1);
   const regionAvailable = (region) => availableItems.filter((i) => i.region === region);
   const totalLeft = availableItems.length;
 
@@ -518,11 +521,19 @@ export default function MarchMadnessAuction() {
                 {seedKeys.map((key) => {
                   const fk = `${setupSeedTab}-${key}`;
                   return (<div key={fk} style={S.nameRow}>
-                    <div style={{ ...S.seedTag, backgroundColor: SEED_COLORS[key] }}>{key === "13-16" ? "13-16" : `#${key}`}</div>
-                    <input style={S.nameInput} placeholder={key === "13-16" ? "Group name" : `Seed ${key} team`}
+                    <div style={{ ...S.seedTag, backgroundColor: SEED_COLORS[key] }}>{`#${key}`}</div>
+                    <input style={S.nameInput} placeholder={`Seed ${key} team`}
                       value={seedNames[fk]} onChange={(e) => setSeedNames({ ...seedNames, [fk]: e.target.value })} />
                   </div>);
                 })}
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={S.nameRow}>
+                    <div style={{ ...S.seedTag, backgroundColor: "#555" }}>13-16</div>
+                    <input style={S.nameInput} placeholder="Group display name"
+                      value={seedNames[`${setupSeedTab}-13-16`]} onChange={(e) => setSeedNames({ ...seedNames, [`${setupSeedTab}-13-16`]: e.target.value })} />
+                  </div>
+                  <p style={{ fontSize: 10, color: "#3e4a5e", marginTop: 4, fontStyle: "italic" }}>Seeds 13–16 are drafted as one group. Individual names show on the bracket.</p>
+                </div>
               </div>
             </div>
 
@@ -716,6 +727,11 @@ export default function MarchMadnessAuction() {
         );
       }
       const seedNum = displaySeed || info.seed;
+      // For seeds 13-16, show individual team name from seedNames if available
+      let teamLabel = info.shortLabel;
+      if (displaySeed && displaySeed >= 13 && displaySeed <= 16 && info.seedNames && info.seedNames[displaySeed]) {
+        teamLabel = info.seedNames[displaySeed];
+      }
       const selected = isSelected;
       return (
         <div
@@ -731,7 +747,7 @@ export default function MarchMadnessAuction() {
             outline: selected ? `1px solid ${info.drafterColor}50` : "none",
           }}>
           <span style={S.bSeed}>{seedNum}</span>
-          <span style={{ ...S.bTeam, color: "#e8e6e1" }}>{info.shortLabel}</span>
+          <span style={{ ...S.bTeam, color: "#e8e6e1" }}>{teamLabel}</span>
           <span style={{ ...S.bOwner, color: info.drafterColor }}>{info.drafter}</span>
         </div>
       );

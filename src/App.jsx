@@ -988,7 +988,8 @@ export default function MarchMadnessAuction() {
 
             <h4 style={S.statsSubTitle}>PROJECTED PAYOUTS BY DRAFTER</h4>
             <p style={{ fontSize: 11, color: "#3e4a5e", marginBottom: 10 }}>Click a drafter row to see team-level breakdown</p>
-            <div className="mm-stats-table" style={S.statsTable}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <div className="mm-stats-table" style={{ ...S.statsTable, minWidth: 700 }}>
               <div style={S.statsHeaderRow}>
                 <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Drafter</span>
                 <span style={S.statsHeaderCell}>Spent</span>
@@ -1069,6 +1070,7 @@ export default function MarchMadnessAuction() {
                   </div>
                 );
               })}
+            </div>
             </div>
 
             <p style={{ fontSize: 11, color: "#3e4a5e", marginTop: 12, fontStyle: "italic" }}>
@@ -1373,6 +1375,9 @@ const globalCSS = `
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   input:focus, button:focus { outline: none; }
+  button { -webkit-tap-highlight-color: transparent; }
+  button:focus-visible { outline: none; }
+  button:active { outline: none; }
   input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; }
   ::selection { background: #E63946; color: #fff; }
@@ -1528,7 +1533,7 @@ const S = {
   editPriceInput: { width: 60, padding: "2px 6px", borderRadius: 4, border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.1)", color: "#4ADE80", fontSize: 13, fontFamily: "'Oswald', sans-serif", fontWeight: 700, textAlign: "right" },
   // Done page tabs
   doneTabBar: { display: "flex", gap: 0, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" },
-  doneTabBtn: { flex: 1, padding: "14px 0", background: "transparent", border: "none", borderBottom: "3px solid transparent", fontFamily: "'Oswald', sans-serif", fontSize: 14, fontWeight: 600, letterSpacing: 3, color: "#5a6478", cursor: "pointer", transition: "all 0.15s" },
+  doneTabBtn: { flex: 1, padding: "14px 0", background: "transparent", border: "none", borderBottom: "3px solid transparent", fontFamily: "'Oswald', sans-serif", fontSize: 14, fontWeight: 600, letterSpacing: 3, color: "#5a6478", cursor: "pointer", transition: "all 0.15s", WebkitTapHighlightColor: "transparent", outline: "none" },
   doneTabBtnActive: { color: "#E63946", borderBottomColor: "#E63946", background: "rgba(230,57,70,0.05)" },
   // Bracket
   bSlot: { display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", borderLeft: "3px solid transparent", borderRight: "3px solid transparent", background: "rgba(255,255,255,0.02)", minHeight: 26 },
@@ -1551,7 +1556,7 @@ const S = {
   statDetail: { fontSize: 11, color: "#8b98b0", marginTop: 6, fontWeight: 600 },
   statsTableContainer: { marginBottom: 20 },
   statsSubTitle: { fontFamily: "'Oswald', sans-serif", fontSize: 13, fontWeight: 600, letterSpacing: 3, color: "#8b98b0", marginBottom: 10 },
-  statsTable: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, overflow: "hidden" },
+  statsTable: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, overflow: "hidden", minWidth: 0 },
   statsHeaderRow: { display: "flex", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" },
   statsHeaderCell: { fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 2, color: "#5a6478", width: 70, textAlign: "right", flexShrink: 0 },
   statsRow: { display: "flex", alignItems: "center", padding: "9px 14px", borderBottom: "1px solid rgba(255,255,255,0.03)" },
@@ -1559,4 +1564,3 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
-

@@ -130,7 +130,6 @@ export default function MarchMadnessAuction() {
       setBudgetMode(state.budgetMode || "unlimited"); setBudgetAmount(state.budgetAmount || 200);
       setBracketPicks(state.bracketPicks || {});
       setPhase(state.phase || "draft");
-      if (state.phase === "done") 
     } catch (e) { console.error("Error applying remote state:", e); }
   }, []);
 
@@ -376,7 +375,6 @@ export default function MarchMadnessAuction() {
     setDraftOrder(saved.draftOrder); setDraftIndex(saved.draftIndex); setCurrentItem(saved.currentItem);
     setLog(saved.log); setBudgetMode(saved.budgetMode); setBudgetAmount(saved.budgetAmount);
     setBracketPicks(saved.bracketPicks || {});
-    if (saved.phase === "done") 
   };
   const startFresh = () => { clearSaveLocal(); setHasSavedDraft(false); };
   const resetDraft = () => {
@@ -1381,4 +1379,3 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
-

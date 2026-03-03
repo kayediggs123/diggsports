@@ -486,8 +486,8 @@ export default function MarchMadnessAuction() {
             <p style={S.tagline}>Set up your drafters, teams, and settings</p>
           </div>
 
-          {/* Drafters + Seed Names */}
-          <div style={S.setupColumns}>
+          {/* Drafters + Seed Names + Bid Limit */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, width: "100%", maxWidth: 900 }}>
             <div style={S.setupCard}>
               <h3 style={S.cardTitle}>DRAFTERS</h3>
               <p style={S.cardSubtitle}>{drafterNames.length} / 20</p>
@@ -525,30 +525,28 @@ export default function MarchMadnessAuction() {
                 })}
               </div>
             </div>
-          </div>
 
-          {/* Bid Limit */}
-          <div style={{ ...S.setupCard, maxWidth: 720, marginTop: 16 }}>
-            <div style={S.settingBlock}>
-              <span style={S.settingLabel}>BID LIMIT</span>
-              <div style={S.toggleRow}>
-                <button style={{ ...S.toggleBtn, ...(budgetMode === "unlimited" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("unlimited")}>
+            <div style={S.setupCard}>
+              <h3 style={S.cardTitle}>BID LIMIT</h3>
+              <p style={S.cardSubtitle}>Set a spending cap per drafter</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <button style={{ ...S.toggleBtn, ...(budgetMode === "unlimited" ? S.toggleBtnActive : {}), width: "100%" }} onClick={() => setBudgetMode("unlimited")}>
                   <span style={S.toggleIcon}>♾️</span><span>No Limit</span></button>
-                <button style={{ ...S.toggleBtn, ...(budgetMode === "capped" ? S.toggleBtnActive : {}) }} onClick={() => setBudgetMode("capped")}>
+                <button style={{ ...S.toggleBtn, ...(budgetMode === "capped" ? S.toggleBtnActive : {}), width: "100%" }} onClick={() => setBudgetMode("capped")}>
                   <span style={S.toggleIcon}>💰</span><span>Set Max Budget</span></button>
               </div>
               {budgetMode === "capped" && (
-                <div style={S.budgetInputRow}><span style={S.budgetDollar}>$</span>
+                <div style={{ ...S.budgetInputRow, marginTop: 12 }}><span style={S.budgetDollar}>$</span>
                   <input style={S.budgetInputField} type="number" min={10} value={budgetAmount}
                     onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) setBudgetAmount(v); }} />
                   <span style={S.budgetPerDrafter}>per drafter</span></div>
               )}
-              <p style={S.settingHint}>{budgetMode === "unlimited" ? "No spending cap." : `$${budgetAmount} per drafter across all 52 items.`}</p>
+              <p style={{ ...S.settingHint, marginTop: 10 }}>{budgetMode === "unlimited" ? "No spending cap." : `$${budgetAmount} per drafter across all 52 items.`}</p>
             </div>
           </div>
 
           {/* Start Draft */}
-          <div style={{ ...S.setupCard, maxWidth: 720, marginTop: 16 }}>
+          <div style={{ ...S.setupCard, maxWidth: 900, marginTop: 16 }}>
             {hostReady && (
               <div style={{ marginBottom: 16 }}>
                 <div style={S.roomCodeBannerInline}>

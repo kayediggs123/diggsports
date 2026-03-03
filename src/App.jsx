@@ -106,6 +106,7 @@ export default function MarchMadnessAuction() {
   // bracketPicks: { "East-R1-0": "East-1", "East-R2-0": "East-1", ... , "FF-0": "East-1", "FF-1": "South-3", "CHAMP": "East-1" }
   // Keys: "{region}-R{round}-{matchIdx}" for regional rounds, "FF-0", "FF-1" for final four, "CHAMP" for champion
   const [bracketPicks, setBracketPicks] = useState({});
+  const [expandedDrafter, setExpandedDrafter] = useState(null);
   const logRef = useRef(null);
   const listenerRef = useRef(null);
 
@@ -970,6 +971,7 @@ export default function MarchMadnessAuction() {
             </div>
 
             <h4 style={S.statsSubTitle}>PROJECTED PAYOUTS BY DRAFTER</h4>
+            <p style={{ fontSize: 11, color: "#3e4a5e", marginBottom: 10 }}>Click a drafter row to see team-level breakdown</p>
             <div style={S.statsTable}>
               <div style={S.statsHeaderRow}>
                 <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Drafter</span>
@@ -984,80 +986,74 @@ export default function MarchMadnessAuction() {
                 const p = drafterPayouts[d.name] || { total: 0, rounds: {} };
                 const spent = totalSpent(d);
                 const profit = p.total - spent;
+                const isExpanded = expandedDrafter === d.name;
+                const dTeams = Object.values(teamPayouts)
+                  .filter((t) => t.drafter === d.name)
+                  .sort((a, b) => {
+                    const ri = REGIONS.indexOf(a.region) - REGIONS.indexOf(b.region);
+                    if (ri !== 0) return ri;
+                    const sa = a.seed === "13-16" ? 13 : parseInt(a.seed);
+                    const sb = b.seed === "13-16" ? 13 : parseInt(b.seed);
+                    return sa - sb;
+                  });
                 return (
-                  <div key={d.name} style={S.statsRow}>
-                    <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.color }}></div>
-                      <span style={{ fontWeight: 600 }}>{d.name}</span>
-                    </span>
-                    <span style={S.statsCell}>${spent}</span>
-                    {PAYOUT_ROUNDS.map((pr, i) => (
-                      <span key={i} style={{ ...S.statsCell, width: 80, color: (p.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e" }}>
-                        ${(p.rounds[pr.name] || 0).toFixed(0)}
+                  <div key={d.name}>
+                    <div style={{ ...S.statsRow, cursor: "pointer", background: isExpanded ? `${d.color}08` : "transparent" }}
+                      onClick={() => setExpandedDrafter(isExpanded ? null : d.name)}>
+                      <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 10, color: "#5a6478", width: 14, textAlign: "center", flexShrink: 0 }}>{isExpanded ? "▼" : "▶"}</span>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.color }}></div>
+                        <span style={{ fontWeight: 600 }}>{d.name}</span>
+                        <span style={{ fontSize: 10, color: "#5a6478" }}>({dTeams.length})</span>
                       </span>
-                    ))}
-                    <span style={{ ...S.statsCell, width: 85, color: "#E9C46A", fontWeight: 700 }}>${p.total.toFixed(0)}</span>
-                    <span style={{ ...S.statsCell, width: 80, color: profit >= 0 ? "#4ADE80" : "#E63946", fontWeight: 700 }}>{profit >= 0 ? "+" : ""}${profit.toFixed(0)}</span>
+                      <span style={S.statsCell}>${spent}</span>
+                      {PAYOUT_ROUNDS.map((pr, i) => (
+                        <span key={i} style={{ ...S.statsCell, width: 80, color: (p.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e" }}>
+                          ${(p.rounds[pr.name] || 0).toFixed(0)}
+                        </span>
+                      ))}
+                      <span style={{ ...S.statsCell, width: 85, color: "#E9C46A", fontWeight: 700 }}>${p.total.toFixed(0)}</span>
+                      <span style={{ ...S.statsCell, width: 80, color: profit >= 0 ? "#4ADE80" : "#E63946", fontWeight: 700 }}>{profit >= 0 ? "+" : ""}${profit.toFixed(0)}</span>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ background: `${d.color}06`, borderLeft: `3px solid ${d.color}`, paddingLeft: 8 }}>
+                        <div style={{ ...S.statsHeaderRow, background: "rgba(255,255,255,0.02)", padding: "6px 14px" }}>
+                          <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left", fontSize: 9 }}>Team</span>
+                          <span style={{ ...S.statsHeaderCell, fontSize: 9 }}>Wins</span>
+                          <span style={{ ...S.statsHeaderCell, fontSize: 9 }}>Cost</span>
+                          {PAYOUT_ROUNDS.map((pr, i) => (
+                            <span key={i} style={{ ...S.statsHeaderCell, width: 80, fontSize: 9 }}>{pr.name.split(" ").pop()}</span>
+                          ))}
+                          <span style={{ ...S.statsHeaderCell, width: 85, fontSize: 9 }}>Total</span>
+                          <span style={{ ...S.statsHeaderCell, width: 80 }}></span>
+                        </div>
+                        {dTeams.map((t) => {
+                          const wins = getTeamWins(t.teamId);
+                          const eliminated = isTeamEliminated(t.teamId);
+                          return (
+                            <div key={t.teamId} style={{ ...S.statsRow, opacity: eliminated ? 0.45 : 1, padding: "6px 14px" }}>
+                              <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                                <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: REGION_COLORS[t.region], flexShrink: 0 }}></div>
+                                <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[t.seed], fontSize: 9, padding: "1px 5px", textDecoration: eliminated ? "line-through" : "none" }}>{t.label}</span>
+                              </span>
+                              <span style={{ ...S.statsCell, color: wins > 0 ? "#4ADE80" : "#3e4a5e" }}>{wins}</span>
+                              <span style={S.statsCell}>${t.price}</span>
+                              {PAYOUT_ROUNDS.map((pr, i) => (
+                                <span key={i} style={{ ...S.statsCell, width: 80, color: (t.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e", fontSize: 12 }}>
+                                  ${(t.rounds[pr.name] || 0).toFixed(0)}
+                                </span>
+                              ))}
+                              <span style={{ ...S.statsCell, width: 85, color: t.total > 0 ? "#E9C46A" : "#3e4a5e", fontWeight: 700 }}>${t.total.toFixed(0)}</span>
+                              <span style={{ ...S.statsCell, width: 80 }}></span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
-
-            <h4 style={{ ...S.statsSubTitle, marginTop: 24 }}>PAYOUTS BY TEAM</h4>
-            {drafters.map((d) => {
-              const dTeams = Object.values(teamPayouts)
-                .filter((t) => t.drafter === d.name)
-                .sort((a, b) => {
-                  const ri = REGIONS.indexOf(a.region) - REGIONS.indexOf(b.region);
-                  if (ri !== 0) return ri;
-                  const sa = a.seed === "13-16" ? 13 : parseInt(a.seed);
-                  const sb = b.seed === "13-16" ? 13 : parseInt(b.seed);
-                  return sa - sb;
-                });
-              if (!dTeams.length) return null;
-              const drafterTotal = dTeams.reduce((s, t) => s + t.total, 0);
-              return (
-                <div key={d.name} style={{ marginBottom: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, padding: "8px 14px", background: `${d.color}12`, borderRadius: 8, borderLeft: `4px solid ${d.color}` }}>
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: d.color }}></div>
-                    <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 14, letterSpacing: 2, flex: 1 }}>{d.name}</span>
-                    <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, color: "#5a6478" }}>{dTeams.length} teams · ${totalSpent(d)} spent</span>
-                    <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 14, color: "#E9C46A" }}>${drafterTotal.toFixed(0)} earned</span>
-                  </div>
-                  <div style={{ ...S.statsTable, overflowX: "auto" }}>
-                    <div style={S.statsHeaderRow}>
-                      <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Team</span>
-                      <span style={{ ...S.statsHeaderCell, width: 55 }}>Wins</span>
-                      <span style={{ ...S.statsHeaderCell, width: 55 }}>Cost</span>
-                      {PAYOUT_ROUNDS.map((pr, i) => (
-                        <span key={i} style={{ ...S.statsHeaderCell, width: 70 }}>{pr.name.split(" ").pop()}</span>
-                      ))}
-                      <span style={{ ...S.statsHeaderCell, width: 75 }}>Total</span>
-                    </div>
-                    {dTeams.map((t) => {
-                      const wins = getTeamWins(t.teamId);
-                      const eliminated = isTeamEliminated(t.teamId);
-                      return (
-                        <div key={t.teamId} style={{ ...S.statsRow, opacity: eliminated ? 0.45 : 1 }}>
-                          <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: REGION_COLORS[t.region], flexShrink: 0 }}></div>
-                            <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[t.seed], fontSize: 9, padding: "1px 5px", textDecoration: eliminated ? "line-through" : "none" }}>{t.label}</span>
-                          </span>
-                          <span style={{ ...S.statsCell, width: 55, color: wins > 0 ? "#4ADE80" : "#3e4a5e" }}>{wins}</span>
-                          <span style={{ ...S.statsCell, width: 55 }}>${t.price}</span>
-                          {PAYOUT_ROUNDS.map((pr, i) => (
-                            <span key={i} style={{ ...S.statsCell, width: 70, color: (t.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e", fontSize: 12 }}>
-                              ${(t.rounds[pr.name] || 0).toFixed(0)}
-                            </span>
-                          ))}
-                          <span style={{ ...S.statsCell, width: 75, color: t.total > 0 ? "#E9C46A" : "#3e4a5e", fontWeight: 700 }}>${t.total.toFixed(0)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
 
             <p style={{ fontSize: 11, color: "#3e4a5e", marginTop: 12, fontStyle: "italic" }}>
               Payouts update as you fill in bracket winners. Pick all games to see final projections.
@@ -1517,4 +1513,3 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
-

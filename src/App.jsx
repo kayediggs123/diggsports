@@ -215,7 +215,7 @@ export default function MarchMadnessAuction() {
 
   const startAsHost = () => { const code = generateRoomCode(); setRoomCode(code); setRole("host"); };
   const startSolo = () => { setRole(null); };
-  const addDrafter = () => { if (drafterNames.length < 15) setDrafterNames([...drafterNames, ""]); };
+  const addDrafter = () => { if (drafterNames.length < 20) setDrafterNames([...drafterNames, ""]); };
   const removeDrafter = (idx) => { if (drafterNames.length > 2) setDrafterNames(drafterNames.filter((_, i) => i !== idx)); };
 
   const advanceToNext = (nextIndex, order, avail, logArr, dftrs) => {
@@ -486,20 +486,11 @@ export default function MarchMadnessAuction() {
             <p style={S.tagline}>Set up your drafters, teams, and settings</p>
           </div>
 
-          {hostReady && (
-            <div style={S.roomCodeBanner}>
-              <div style={S.roomCodeLabel}>SHARE THIS ROOM CODE</div>
-              <div style={S.roomCodeDisplay}>{roomCode}</div>
-              <p style={S.roomCodeHint}>Others can join with this code to watch live</p>
-              <button style={S.roomCodeCopyBtn} onClick={() => navigator.clipboard.writeText(roomCode)}>📋 Copy Code</button>
-            </div>
-          )}
-
           {/* Drafters + Seed Names */}
           <div style={S.setupColumns}>
             <div style={S.setupCard}>
               <h3 style={S.cardTitle}>DRAFTERS</h3>
-              <p style={S.cardSubtitle}>{drafterNames.length} / 15</p>
+              <p style={S.cardSubtitle}>{drafterNames.length} / 20</p>
               <div style={S.nameList}>
                 {drafterNames.map((name, i) => (
                   <div key={i} style={S.nameRow}>
@@ -511,7 +502,7 @@ export default function MarchMadnessAuction() {
                   </div>
                 ))}
               </div>
-              {drafterNames.length < 15 && <button style={S.addBtn} onClick={addDrafter}>+ Add Drafter</button>}
+              {drafterNames.length < 20 && <button style={S.addBtn} onClick={addDrafter}>+ Add Drafter</button>}
             </div>
 
             <div style={S.setupCard}>
@@ -536,7 +527,7 @@ export default function MarchMadnessAuction() {
             </div>
           </div>
 
-          {/* Settings */}
+          {/* Bid Limit */}
           <div style={{ ...S.setupCard, maxWidth: 720, marginTop: 16 }}>
             <div style={S.settingBlock}>
               <span style={S.settingLabel}>BID LIMIT</span>
@@ -554,17 +545,45 @@ export default function MarchMadnessAuction() {
               )}
               <p style={S.settingHint}>{budgetMode === "unlimited" ? "No spending cap." : `$${budgetAmount} per drafter across all 52 items.`}</p>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              {!isHost ? (<>
-                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={() => { startSolo(); startDraft(); }} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
-                <button style={{ ...S.startBtnLive, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startAsHost} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
-              </>) : (
-                <button style={{ ...S.startBtn, flex: 1, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+          </div>
+
+          {/* Start Draft */}
+          <div style={{ ...S.setupCard, maxWidth: 720, marginTop: 16 }}>
+            {hostReady && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={S.roomCodeBannerInline}>
+                  <div style={S.roomCodeLabel}>ROOM CODE</div>
+                  <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 32, fontWeight: 700, letterSpacing: 8, color: "#fff" }}>{roomCode}</div>
+                  <button style={S.roomCodeCopyBtn} onClick={() => navigator.clipboard.writeText(roomCode)}>📋 Copy</button>
+                </div>
+              </div>
+            )}
+            {!isHost ? (
+              <div style={S.setupColumns}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+                  <button style={{ ...S.startBtn, width: "100%", opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                    onClick={() => { startSolo(); startDraft(); }} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
+                  <p style={{ fontSize: 12, color: "#5a6478", textAlign: "center", lineHeight: 1.5 }}>
+                    Run the draft on this device only. You control all bids and results locally. Data is saved to your browser — no internet connection needed.
+                  </p>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+                  <button style={{ ...S.startBtnLive, width: "100%", opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
+                    onClick={startAsHost} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
+                  <p style={{ fontSize: 12, color: "#5a6478", textAlign: "center", lineHeight: 1.5 }}>
+                    Create a room code that others can join to watch the draft live in real-time. You run the auction — viewers see results update instantly on their own devices.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+                <button style={{ ...S.startBtn, width: "100%", maxWidth: 360, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
                   onClick={startDraft} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START THE DRAFT 🏀</button>
-              )}
-            </div>
+                <p style={{ fontSize: 12, color: "#5a6478", textAlign: "center", lineHeight: 1.5 }}>
+                  Share the room code above with viewers before starting. They'll see every pick update in real-time.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1385,6 +1404,7 @@ const S = {
   roomCodeDisplay: { fontFamily: "'Oswald', sans-serif", fontSize: 52, fontWeight: 700, letterSpacing: 12, color: "#fff", textShadow: "0 0 30px rgba(58,134,255,0.4)" },
   roomCodeHint: { color: "#5a6478", fontSize: 13, marginTop: 8 },
   roomCodeCopyBtn: { marginTop: 12, padding: "8px 20px", borderRadius: 8, border: "1px solid rgba(58,134,255,0.3)", background: "rgba(58,134,255,0.12)", color: "#3A86FF", fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 2, cursor: "pointer" },
+  roomCodeBannerInline: { display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderRadius: 10, background: "rgba(58,134,255,0.08)", border: "1px solid rgba(58,134,255,0.25)", justifyContent: "center", flexWrap: "wrap" },
   joinBtn: { padding: "12px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #3A86FF, #023E8A)", color: "#fff", fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 14, letterSpacing: 2, cursor: "pointer" },
   setupColumns: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, width: "100%", maxWidth: 720 },
   setupCard: { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "22px 20px", backdropFilter: "blur(12px)" },

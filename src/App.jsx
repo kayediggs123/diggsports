@@ -20,7 +20,8 @@ const REGION_COLORS = { East: "#3A86FF", West: "#E63946", South: "#2A9D8F", Midw
 const SEED_COLORS = {
   1: "#C41E3A", 2: "#1D428A", 3: "#00843D", 4: "#FF8200",
   5: "#4B2E83", 6: "#CC0033", 7: "#003087", 8: "#8C1D40",
-  9: "#FFC72C", 10: "#006747", 11: "#B3A369", 12: "#BA0C2F", "13-16": "#555",
+  9: "#FFC72C", 10: "#006747", 11: "#B3A369", 12: "#BA0C2F",
+  13: "#555", 14: "#666", 15: "#555", 16: "#666", "13-16": "#555",
 };
 const COLORS = [
   "#E63946", "#457B9D", "#2A9D8F", "#E9C46A", "#F4A261",
@@ -622,6 +623,9 @@ export default function MarchMadnessAuction() {
     // ── Interactive Bracket ──
     const R1 = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
 
+    // Map a seed number to its draft item ID (seeds 13-16 share one group item)
+    const seedToId = (region, seed) => seed >= 13 ? `${region}-13-16` : `${region}-${seed}`;
+
     // Get team info from a teamId like "East-1" or "East-13-16"
     const getTeamInfo = (teamId) => {
       if (!teamId) return null;
@@ -650,8 +654,8 @@ export default function MarchMadnessAuction() {
       const R1m = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
       for (let i = 0; i < 8; i++) {
         const [a, b] = R1m[i];
-        const idA = a >= 13 ? `${region}-13-16` : `${region}-${a}`;
-        const idB = b >= 13 ? `${region}-13-16` : `${region}-${b}`;
+        const idA = seedToId(region, a);
+        const idB = seedToId(region, b);
         if (idA === teamId || idB === teamId) {
           const pick = bracketPicks[`${region}-R1-${i}`];
           if (pick && pick !== teamId) return true; // lost in R1
@@ -691,8 +695,8 @@ export default function MarchMadnessAuction() {
     const getMatchupTeams = (region, round, idx) => {
       if (round === 1) {
         const [a, b] = R1[idx];
-        const idA = a >= 13 ? `${region}-13-16` : `${region}-${a}`;
-        const idB = b >= 13 ? `${region}-13-16` : `${region}-${b}`;
+        const idA = `${region}-${a}`;
+        const idB = `${region}-${b}`;
         return [idA, idB];
       }
       // For later rounds, look at who was picked in the previous round
@@ -701,8 +705,8 @@ export default function MarchMadnessAuction() {
       return [prevA || null, prevB || null];
     };
 
-    // Clickable team slot
-    const ClickSlot = ({ teamId, pickKey, flip, isSelected }) => {
+    // Clickable team slot — displaySeed overrides the seed number shown (for 13-16 group)
+    const ClickSlot = ({ teamId, pickKey, flip, isSelected, displaySeed }) => {
       const info = getTeamInfo(teamId);
       if (!teamId || !info) {
         return (
@@ -711,6 +715,7 @@ export default function MarchMadnessAuction() {
           </div>
         );
       }
+      const seedNum = displaySeed || info.seed;
       const selected = isSelected;
       return (
         <div
@@ -725,7 +730,7 @@ export default function MarchMadnessAuction() {
             background: selected ? `${info.drafterColor}18` : "rgba(255,255,255,0.02)",
             outline: selected ? `1px solid ${info.drafterColor}50` : "none",
           }}>
-          <span style={S.bSeed}>{info.seed}</span>
+          <span style={S.bSeed}>{seedNum}</span>
           <span style={{ ...S.bTeam, color: "#e8e6e1" }}>{info.shortLabel}</span>
           <span style={{ ...S.bOwner, color: info.drafterColor }}>{info.drafter}</span>
         </div>
@@ -741,14 +746,14 @@ export default function MarchMadnessAuction() {
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-around", minWidth: 0, flex: "1 1 0" }}>
             <div style={{ ...S.bRoundLabel, color: rc, textAlign: flip ? "right" : "left" }}>{region.toUpperCase()}</div>
             {R1.map(([a, b], i) => {
-              const idA = a >= 13 ? `${region}-13-16` : `${region}-${a}`;
-              const idB = b >= 13 ? `${region}-13-16` : `${region}-${b}`;
+              const idA = seedToId(region, a);
+              const idB = seedToId(region, b);
               const pickKey = `${region}-R1-${i}`;
               const picked = bracketPicks[pickKey];
               return (
                 <div key={i} style={{ ...S.bMatchupBox, marginBottom: i < 7 ? 2 : 0 }}>
-                  <ClickSlot teamId={idA} pickKey={pickKey} flip={flip} isSelected={picked === idA} />
-                  <ClickSlot teamId={idB} pickKey={pickKey} flip={flip} isSelected={picked === idB} />
+                  <ClickSlot teamId={idA} pickKey={pickKey} flip={flip} isSelected={picked === idA} displaySeed={a} />
+                  <ClickSlot teamId={idB} pickKey={pickKey} flip={flip} isSelected={picked === idB} displaySeed={b} />
                 </div>
               );
             })}
@@ -1564,3 +1569,4 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
+

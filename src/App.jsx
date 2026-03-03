@@ -616,6 +616,60 @@ export default function MarchMadnessAuction() {
       return null;
     };
 
+    // Count how many wins a team has in the bracket
+    const getTeamWins = (teamId) => {
+      if (!teamId) return 0;
+      let wins = 0;
+      // Check all bracket pick values — each time this team appears as a pick, it won that game
+      Object.values(bracketPicks).forEach((v) => { if (v === teamId) wins++; });
+      return wins;
+    };
+
+    // Check if a team has been eliminated (lost in a round where the opponent was picked instead)
+    const isTeamEliminated = (teamId) => {
+      if (!teamId) return false;
+      const region = teamId.split("-")[0];
+      // Check R1: was this team in a matchup where the other team was picked?
+      const R1m = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
+      for (let i = 0; i < 8; i++) {
+        const [a, b] = R1m[i];
+        const idA = a >= 13 ? `${region}-13-16` : `${region}-${a}`;
+        const idB = b >= 13 ? `${region}-13-16` : `${region}-${b}`;
+        if (idA === teamId || idB === teamId) {
+          const pick = bracketPicks[`${region}-R1-${i}`];
+          if (pick && pick !== teamId) return true; // lost in R1
+          break;
+        }
+      }
+      // Check R2-R4: if this team won into a round but then the opponent was picked
+      for (let round = 2; round <= 4; round++) {
+        const count = round === 2 ? 4 : round === 3 ? 2 : 1;
+        for (let i = 0; i < count; i++) {
+          const prevA = bracketPicks[`${region}-R${round - 1}-${i * 2}`];
+          const prevB = bracketPicks[`${region}-R${round - 1}-${i * 2 + 1}`];
+          if (prevA === teamId || prevB === teamId) {
+            const pick = bracketPicks[`${region}-R${round}-${i}`];
+            if (pick && pick !== teamId) return true;
+          }
+        }
+      }
+      // Check SF: if team won E8 but lost in semifinal
+      const e8Winner = bracketPicks[`${region}-R4-0`];
+      if (e8Winner === teamId) {
+        const sfKey = (region === "East" || region === "Midwest") ? "SF-0" : "SF-1";
+        const sfPick = bracketPicks[sfKey];
+        if (sfPick && sfPick !== teamId) return true;
+      }
+      // Check CHAMP: if team won SF but lost championship
+      const sf0 = bracketPicks["SF-0"];
+      const sf1 = bracketPicks["SF-1"];
+      if (sf0 === teamId || sf1 === teamId) {
+        const champPick = bracketPicks["CHAMP"];
+        if (champPick && champPick !== teamId) return true;
+      }
+      return false;
+    };
+
     // Get the two teams competing in a matchup at a given key
     const getMatchupTeams = (region, round, idx) => {
       if (round === 1) {
@@ -743,10 +797,15 @@ export default function MarchMadnessAuction() {
       return winners;
     };
 
-    // Compute payouts per drafter
+    // Compute payouts per drafter AND per team
     const computePayouts = () => {
-      const payouts = {};
-      drafters.forEach((d) => { payouts[d.name] = { total: 0, rounds: {} }; });
+      const drafterPayouts = {};
+      const teamPayouts = {}; // keyed by teamId
+      drafters.forEach((d) => { drafterPayouts[d.name] = { total: 0, rounds: {} }; });
+      // Initialize all teams
+      drafters.forEach((d) => (d.items || []).forEach((item) => {
+        teamPayouts[item.id] = { teamId: item.id, label: item.shortLabel, seed: item.seed, region: item.region, drafter: d.name, drafterColor: d.color, price: item.price, total: 0, rounds: {} };
+      }));
       PAYOUT_ROUNDS.forEach((pr, ri) => {
         const roundNum = ri + 1;
         const roundPool = totalPot * pr.pct;
@@ -755,16 +814,20 @@ export default function MarchMadnessAuction() {
         const perWinner = roundPool / winners.length;
         winners.forEach((teamId) => {
           const info = getTeamInfo(teamId);
-          if (info && payouts[info.drafter]) {
-            payouts[info.drafter].total += perWinner;
-            if (!payouts[info.drafter].rounds[pr.name]) payouts[info.drafter].rounds[pr.name] = 0;
-            payouts[info.drafter].rounds[pr.name] += perWinner;
+          if (info && drafterPayouts[info.drafter]) {
+            drafterPayouts[info.drafter].total += perWinner;
+            if (!drafterPayouts[info.drafter].rounds[pr.name]) drafterPayouts[info.drafter].rounds[pr.name] = 0;
+            drafterPayouts[info.drafter].rounds[pr.name] += perWinner;
+          }
+          if (teamPayouts[teamId]) {
+            teamPayouts[teamId].total += perWinner;
+            teamPayouts[teamId].rounds[pr.name] = (teamPayouts[teamId].rounds[pr.name] || 0) + perWinner;
           }
         });
       });
-      return payouts;
+      return { drafterPayouts, teamPayouts };
     };
-    const payouts = computePayouts();
+    const { drafterPayouts, teamPayouts } = computePayouts();
 
     return (
       <div style={S.page}><style>{globalCSS}</style>
@@ -910,7 +973,7 @@ export default function MarchMadnessAuction() {
                 <span style={{ ...S.statsHeaderCell, width: 80 }}>Profit</span>
               </div>
               {drafters.map((d) => {
-                const p = payouts[d.name] || { total: 0, rounds: {} };
+                const p = drafterPayouts[d.name] || { total: 0, rounds: {} };
                 const spent = totalSpent(d);
                 const profit = p.total - spent;
                 return (
@@ -930,6 +993,50 @@ export default function MarchMadnessAuction() {
                   </div>
                 );
               })}
+            </div>
+
+            <h4 style={{ ...S.statsSubTitle, marginTop: 24 }}>PAYOUTS BY TEAM</h4>
+            <div style={{ ...S.statsTable, overflowX: "auto" }}>
+              <div style={S.statsHeaderRow}>
+                <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Team</span>
+                <span style={{ ...S.statsHeaderCell, width: 70 }}>Owner</span>
+                <span style={{ ...S.statsHeaderCell, width: 55 }}>Wins</span>
+                <span style={{ ...S.statsHeaderCell, width: 55 }}>Cost</span>
+                {PAYOUT_ROUNDS.map((pr, i) => (
+                  <span key={i} style={{ ...S.statsHeaderCell, width: 70 }}>{pr.name.split(" ").pop()}</span>
+                ))}
+                <span style={{ ...S.statsHeaderCell, width: 75 }}>Total</span>
+              </div>
+              {Object.values(teamPayouts)
+                .sort((a, b) => {
+                  // Sort by region then seed
+                  const ri = REGIONS.indexOf(a.region) - REGIONS.indexOf(b.region);
+                  if (ri !== 0) return ri;
+                  const sa = a.seed === "13-16" ? 13 : parseInt(a.seed);
+                  const sb = b.seed === "13-16" ? 13 : parseInt(b.seed);
+                  return sa - sb;
+                })
+                .map((t) => {
+                  const wins = getTeamWins(t.teamId);
+                  const eliminated = isTeamEliminated(t.teamId);
+                  return (
+                    <div key={t.teamId} style={{ ...S.statsRow, opacity: eliminated ? 0.45 : 1 }}>
+                      <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: REGION_COLORS[t.region], flexShrink: 0 }}></div>
+                        <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[t.seed], fontSize: 9, padding: "1px 5px", textDecoration: eliminated ? "line-through" : "none" }}>{t.label}</span>
+                      </span>
+                      <span style={{ ...S.statsCell, width: 70, color: t.drafterColor, fontSize: 11 }}>{t.drafter}</span>
+                      <span style={{ ...S.statsCell, width: 55, color: wins > 0 ? "#4ADE80" : "#3e4a5e" }}>{wins}</span>
+                      <span style={{ ...S.statsCell, width: 55 }}>${t.price}</span>
+                      {PAYOUT_ROUNDS.map((pr, i) => (
+                        <span key={i} style={{ ...S.statsCell, width: 70, color: (t.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e", fontSize: 12 }}>
+                          ${(t.rounds[pr.name] || 0).toFixed(0)}
+                        </span>
+                      ))}
+                      <span style={{ ...S.statsCell, width: 75, color: t.total > 0 ? "#E9C46A" : "#3e4a5e", fontWeight: 700 }}>${t.total.toFixed(0)}</span>
+                    </div>
+                  );
+                })}
             </div>
 
             <p style={{ fontSize: 11, color: "#3e4a5e", marginTop: 12, fontStyle: "italic" }}>
@@ -955,15 +1062,25 @@ export default function MarchMadnessAuction() {
                     {(d.items || []).length === 0 ? <p style={S.noItems}>{isDragOver ? "Drop here!" : "No teams yet"}</p> : (
                       <div style={S.resultItemList}>
                         {REGIONS.map((region) => {
-                          const ri = (d.items || []).filter((item) => item.region === region); if (!ri.length) return null;
+                          const ri = (d.items || []).filter((item) => item.region === region);
+                          if (!ri.length) return null;
+                          // Sort seeds numerically
+                          const sorted = [...ri].sort((a, b) => {
+                            const sa = a.seed === "13-16" ? 13 : parseInt(a.seed);
+                            const sb = b.seed === "13-16" ? 13 : parseInt(b.seed);
+                            return sa - sb;
+                          });
                           return (<div key={region}>
                             <div style={{ ...S.resultRegionLabel, color: REGION_COLORS[region] }}>{region}</div>
-                            {ri.map((item, j) => {
+                            {sorted.map((item, j) => {
                               const gi = d.items.indexOf(item);
                               const isEditing = editingPrice && editingPrice.drafterIdx === i && editingPrice.itemIdx === gi;
+                              const wins = getTeamWins(item.id);
+                              const eliminated = isTeamEliminated(item.id);
                               return (<div key={j} draggable={!isViewer} onDragStart={() => handleDragStart(i, gi, item)}
-                                style={{ ...S.resultItem, cursor: isViewer ? "default" : "grab", opacity: dragItem && dragItem.drafterIdx === i && dragItem.itemIdx === gi ? 0.3 : 1, borderRadius: 5, padding: "3px 4px", marginLeft: -4, marginRight: -4 }}>
-                                <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[item.seed] }}>{item.shortLabel}</span>
+                                style={{ ...S.resultItem, cursor: isViewer ? "default" : "grab", opacity: dragItem && dragItem.drafterIdx === i && dragItem.itemIdx === gi ? 0.3 : eliminated ? 0.45 : 1, borderRadius: 5, padding: "3px 4px", marginLeft: -4, marginRight: -4 }}>
+                                <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[item.seed], textDecoration: eliminated ? "line-through" : "none" }}>{item.shortLabel}</span>
+                                <span style={{ ...S.resultWins, color: wins > 0 ? "#4ADE80" : "#3e4a5e" }}>{wins}W</span>
                                 {isEditing ? (
                                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                     <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 700 }}>$</span>
@@ -973,7 +1090,7 @@ export default function MarchMadnessAuction() {
                                       onBlur={confirmEditPrice} />
                                   </div>
                                 ) : (
-                                  <span style={{ ...S.resultPrice, cursor: isViewer ? "default" : "pointer" }}
+                                  <span style={{ ...S.resultPrice, cursor: isViewer ? "default" : "pointer", textDecoration: eliminated ? "line-through" : "none" }}
                                     onClick={() => !isViewer && startEditPrice(i, gi, item.price)}>${item.price}</span>
                                 )}
                               </div>);
@@ -1345,6 +1462,7 @@ const S = {
   resultItem: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   resultSeedBadge: { padding: "2px 8px", borderRadius: 4, color: "#fff", fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: 1 },
   resultPrice: { fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, color: "#4ADE80" },
+  resultWins: { fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 11, minWidth: 24, textAlign: "center", flexShrink: 0 },
   editPriceInput: { width: 60, padding: "2px 6px", borderRadius: 4, border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.1)", color: "#4ADE80", fontSize: 13, fontFamily: "'Oswald', sans-serif", fontWeight: 700, textAlign: "right" },
   // Done page tabs
   doneTabBar: { display: "flex", gap: 0, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" },

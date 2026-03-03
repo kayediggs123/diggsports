@@ -950,12 +950,14 @@ export default function MarchMadnessAuction() {
                 {PAYOUT_ROUNDS.map((pr, i) => {
                   const roundPool = totalPot * pr.pct;
                   const perWin = roundPool / pr.winners;
+                  const cumulative = PAYOUT_ROUNDS.slice(0, i + 1).reduce((sum, r) => sum + (totalPot * r.pct) / r.winners, 0);
                   return (
                     <div key={i} style={{ ...S.statCard, flex: "1 1 140px", minWidth: 140 }}>
                       <div style={{ ...S.statValue, fontSize: 20 }}>{Math.round(pr.pct * 100)}%</div>
                       <div style={S.statLabel}>{pr.name.toUpperCase()}</div>
                       <div style={{ ...S.statDetail, color: "#4ADE80" }}>${roundPool.toFixed(0)} pool</div>
                       <div style={{ ...S.statDetail, color: "#E9C46A", marginTop: 2 }}>${perWin.toFixed(2)} per win</div>
+                      <div style={{ ...S.statDetail, color: "#8b98b0", marginTop: 2 }}>${cumulative.toFixed(2)} cumulative</div>
                       <div style={{ fontSize: 10, color: "#3e4a5e", marginTop: 2 }}>{pr.winners} team{pr.winners > 1 ? "s" : ""}</div>
                     </div>
                   );
@@ -1002,48 +1004,60 @@ export default function MarchMadnessAuction() {
             </div>
 
             <h4 style={{ ...S.statsSubTitle, marginTop: 24 }}>PAYOUTS BY TEAM</h4>
-            <div style={{ ...S.statsTable, overflowX: "auto" }}>
-              <div style={S.statsHeaderRow}>
-                <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Team</span>
-                <span style={{ ...S.statsHeaderCell, width: 70 }}>Owner</span>
-                <span style={{ ...S.statsHeaderCell, width: 55 }}>Wins</span>
-                <span style={{ ...S.statsHeaderCell, width: 55 }}>Cost</span>
-                {PAYOUT_ROUNDS.map((pr, i) => (
-                  <span key={i} style={{ ...S.statsHeaderCell, width: 70 }}>{pr.name.split(" ").pop()}</span>
-                ))}
-                <span style={{ ...S.statsHeaderCell, width: 75 }}>Total</span>
-              </div>
-              {Object.values(teamPayouts)
+            {drafters.map((d) => {
+              const dTeams = Object.values(teamPayouts)
+                .filter((t) => t.drafter === d.name)
                 .sort((a, b) => {
-                  // Sort by region then seed
                   const ri = REGIONS.indexOf(a.region) - REGIONS.indexOf(b.region);
                   if (ri !== 0) return ri;
                   const sa = a.seed === "13-16" ? 13 : parseInt(a.seed);
                   const sb = b.seed === "13-16" ? 13 : parseInt(b.seed);
                   return sa - sb;
-                })
-                .map((t) => {
-                  const wins = getTeamWins(t.teamId);
-                  const eliminated = isTeamEliminated(t.teamId);
-                  return (
-                    <div key={t.teamId} style={{ ...S.statsRow, opacity: eliminated ? 0.45 : 1 }}>
-                      <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: REGION_COLORS[t.region], flexShrink: 0 }}></div>
-                        <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[t.seed], fontSize: 9, padding: "1px 5px", textDecoration: eliminated ? "line-through" : "none" }}>{t.label}</span>
-                      </span>
-                      <span style={{ ...S.statsCell, width: 70, color: t.drafterColor, fontSize: 11 }}>{t.drafter}</span>
-                      <span style={{ ...S.statsCell, width: 55, color: wins > 0 ? "#4ADE80" : "#3e4a5e" }}>{wins}</span>
-                      <span style={{ ...S.statsCell, width: 55 }}>${t.price}</span>
+                });
+              if (!dTeams.length) return null;
+              const drafterTotal = dTeams.reduce((s, t) => s + t.total, 0);
+              return (
+                <div key={d.name} style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, padding: "8px 14px", background: `${d.color}12`, borderRadius: 8, borderLeft: `4px solid ${d.color}` }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: d.color }}></div>
+                    <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 14, letterSpacing: 2, flex: 1 }}>{d.name}</span>
+                    <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 13, color: "#5a6478" }}>{dTeams.length} teams · ${totalSpent(d)} spent</span>
+                    <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 14, color: "#E9C46A" }}>${drafterTotal.toFixed(0)} earned</span>
+                  </div>
+                  <div style={{ ...S.statsTable, overflowX: "auto" }}>
+                    <div style={S.statsHeaderRow}>
+                      <span style={{ ...S.statsHeaderCell, flex: 1, textAlign: "left" }}>Team</span>
+                      <span style={{ ...S.statsHeaderCell, width: 55 }}>Wins</span>
+                      <span style={{ ...S.statsHeaderCell, width: 55 }}>Cost</span>
                       {PAYOUT_ROUNDS.map((pr, i) => (
-                        <span key={i} style={{ ...S.statsCell, width: 70, color: (t.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e", fontSize: 12 }}>
-                          ${(t.rounds[pr.name] || 0).toFixed(0)}
-                        </span>
+                        <span key={i} style={{ ...S.statsHeaderCell, width: 70 }}>{pr.name.split(" ").pop()}</span>
                       ))}
-                      <span style={{ ...S.statsCell, width: 75, color: t.total > 0 ? "#E9C46A" : "#3e4a5e", fontWeight: 700 }}>${t.total.toFixed(0)}</span>
+                      <span style={{ ...S.statsHeaderCell, width: 75 }}>Total</span>
                     </div>
-                  );
-                })}
-            </div>
+                    {dTeams.map((t) => {
+                      const wins = getTeamWins(t.teamId);
+                      const eliminated = isTeamEliminated(t.teamId);
+                      return (
+                        <div key={t.teamId} style={{ ...S.statsRow, opacity: eliminated ? 0.45 : 1 }}>
+                          <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                            <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: REGION_COLORS[t.region], flexShrink: 0 }}></div>
+                            <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[t.seed], fontSize: 9, padding: "1px 5px", textDecoration: eliminated ? "line-through" : "none" }}>{t.label}</span>
+                          </span>
+                          <span style={{ ...S.statsCell, width: 55, color: wins > 0 ? "#4ADE80" : "#3e4a5e" }}>{wins}</span>
+                          <span style={{ ...S.statsCell, width: 55 }}>${t.price}</span>
+                          {PAYOUT_ROUNDS.map((pr, i) => (
+                            <span key={i} style={{ ...S.statsCell, width: 70, color: (t.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e", fontSize: 12 }}>
+                              ${(t.rounds[pr.name] || 0).toFixed(0)}
+                            </span>
+                          ))}
+                          <span style={{ ...S.statsCell, width: 75, color: t.total > 0 ? "#E9C46A" : "#3e4a5e", fontWeight: 700 }}>${t.total.toFixed(0)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
 
             <p style={{ fontSize: 11, color: "#3e4a5e", marginTop: 12, fontStyle: "italic" }}>
               Payouts update as you fill in bracket winners. Pick all games to see final projections.

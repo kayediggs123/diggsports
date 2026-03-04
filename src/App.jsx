@@ -53,11 +53,16 @@ const buildItems = (seedNames) => {
       const name = seedNames[`${region}-${s}`]?.trim();
       list.push({ id: `${region}-${s}`, seed: s, region, label: name ? `#${s} ${name}` : `#${s} Seed`, shortLabel: name || `#${s}`, type: "single" });
     }
-    // Group 13-16: collect individual names for bracket display, use group name for draft label
-    const gn = seedNames[`${region}-13-16`]?.trim();
+    // Group 13-16: concatenate individual names for draft/results display
     const names1316 = {};
-    for (let s = 13; s <= 16; s++) names1316[s] = seedNames[`${region}-${s}`]?.trim() || "";
-    list.push({ id: `${region}-13-16`, seed: "13-16", region, label: gn ? `13-16 ${gn}` : "13-16 Seeds", shortLabel: gn || "13-16", type: "group", seedNames: names1316 });
+    const nameList = [];
+    for (let s = 13; s <= 16; s++) {
+      const n = seedNames[`${region}-${s}`]?.trim() || "";
+      names1316[s] = n;
+      if (n) nameList.push(n);
+    }
+    const combined = nameList.length > 0 ? nameList.join(", ") : "";
+    list.push({ id: `${region}-13-16`, seed: "13-16", region, label: combined ? `13-16 ${combined}` : "13-16 Seeds", shortLabel: combined || "13-16", type: "group", seedNames: names1316 });
   });
   return list;
 };
@@ -520,20 +525,14 @@ export default function MarchMadnessAuction() {
               <div style={S.seedNameScroll}>
                 {seedKeys.map((key) => {
                   const fk = `${setupSeedTab}-${key}`;
-                  return (<div key={fk} style={S.nameRow}>
+                  const is1316 = key >= 13;
+                  return (<div key={fk} style={{ ...S.nameRow, ...(key === 13 ? { marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" } : {}) }}>
                     <div style={{ ...S.seedTag, backgroundColor: SEED_COLORS[key] }}>{`#${key}`}</div>
                     <input style={S.nameInput} placeholder={`Seed ${key} team`}
                       value={seedNames[fk]} onChange={(e) => setSeedNames({ ...seedNames, [fk]: e.target.value })} />
                   </div>);
                 })}
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div style={S.nameRow}>
-                    <div style={{ ...S.seedTag, backgroundColor: "#555" }}>13-16</div>
-                    <input style={S.nameInput} placeholder="Group display name"
-                      value={seedNames[`${setupSeedTab}-13-16`]} onChange={(e) => setSeedNames({ ...seedNames, [`${setupSeedTab}-13-16`]: e.target.value })} />
-                  </div>
-                  <p style={{ fontSize: 10, color: "#3e4a5e", marginTop: 4, fontStyle: "italic" }}>Seeds 13–16 are drafted as one group. Individual names show on the bracket.</p>
-                </div>
+                <p style={{ fontSize: 10, color: "#3e4a5e", marginTop: 6, fontStyle: "italic" }}>Seeds 13–16 are drafted as one group.</p>
               </div>
             </div>
 

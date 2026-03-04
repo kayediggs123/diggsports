@@ -633,72 +633,102 @@ export default function MarchMadnessAuction() {
     // ── Interactive Bracket ──
     const R1 = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
 
-    // Map a seed number to its draft item ID (seeds 13-16 share one group item)
-    const seedToId = (region, seed) => seed >= 13 ? `${region}-13-16` : `${region}-${seed}`;
+    // Map a seed number to its bracket ID (seeds 13-16 use composite ID to track which specific seed)
+    const seedToId = (region, seed) => seed >= 13 ? `${region}-13-16:${seed}` : `${region}-${seed}`;
 
-    // Get team info from a teamId like "East-1" or "East-13-16"
-    const getTeamInfo = (teamId) => {
-      if (!teamId) return null;
+    // Extract the draft item ID from a bracket ID (strips :seed suffix for 13-16)
+    const toDraftId = (bracketId) => bracketId ? bracketId.split(":")[0] : null;
+
+    // Extract the specific seed number from a bracket ID
+    const toSeedNum = (bracketId) => {
+      if (!bracketId) return null;
+      const parts = bracketId.split(":");
+      return parts[1] ? parseInt(parts[1]) : null;
+    };
+
+    // Get team info from a bracketId like "East-1" or "East-13-16:14"
+    const getTeamInfo = (bracketId) => {
+      if (!bracketId) return null;
+      const draftId = toDraftId(bracketId);
       for (const d of drafters) {
         for (const item of (d.items || [])) {
-          if (item.id === teamId) return { ...item, drafter: d.name, drafterColor: d.color };
+          if (item.id === draftId) return { ...item, drafter: d.name, drafterColor: d.color };
         }
       }
       return null;
     };
 
-    // Count how many wins a team has in the bracket
+    // Count how many wins a team has in the bracket (by draft item ID)
     const getTeamWins = (teamId) => {
       if (!teamId) return 0;
       let wins = 0;
-      // Check all bracket pick values — each time this team appears as a pick, it won that game
-      Object.values(bracketPicks).forEach((v) => { if (v === teamId) wins++; });
+      Object.values(bracketPicks).forEach((v) => { if (v && toDraftId(v) === teamId) wins++; });
       return wins;
     };
 
-    // Check if a team has been eliminated (lost in a round where the opponent was picked instead)
-    const isTeamEliminated = (teamId) => {
-      if (!teamId) return false;
-      const region = teamId.split("-")[0];
-      // Check R1: was this team in a matchup where the other team was picked?
+    // Check if a bracket ID has been eliminated (uses full bracket IDs including :seed suffix)
+    const isBracketIdEliminated = (bracketId) => {
+      if (!bracketId) return false;
+      const draftId = toDraftId(bracketId);
+      const region = draftId.split("-")[0];
+      // Check R1
       const R1m = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
       for (let i = 0; i < 8; i++) {
         const [a, b] = R1m[i];
         const idA = seedToId(region, a);
         const idB = seedToId(region, b);
-        if (idA === teamId || idB === teamId) {
+        if (idA === bracketId || idB === bracketId) {
           const pick = bracketPicks[`${region}-R1-${i}`];
-          if (pick && pick !== teamId) return true; // lost in R1
+          if (pick && pick !== bracketId) return true;
           break;
         }
       }
-      // Check R2-R4: if this team won into a round but then the opponent was picked
+      // Check R2-R4
       for (let round = 2; round <= 4; round++) {
         const count = round === 2 ? 4 : round === 3 ? 2 : 1;
         for (let i = 0; i < count; i++) {
           const prevA = bracketPicks[`${region}-R${round - 1}-${i * 2}`];
           const prevB = bracketPicks[`${region}-R${round - 1}-${i * 2 + 1}`];
-          if (prevA === teamId || prevB === teamId) {
+          if (prevA === bracketId || prevB === bracketId) {
             const pick = bracketPicks[`${region}-R${round}-${i}`];
-            if (pick && pick !== teamId) return true;
+            if (pick && pick !== bracketId) return true;
           }
         }
       }
-      // Check SF: if team won E8 but lost in semifinal
+      // Check SF
       const e8Winner = bracketPicks[`${region}-R4-0`];
-      if (e8Winner === teamId) {
+      if (e8Winner === bracketId) {
         const sfKey = (region === "East" || region === "Midwest") ? "SF-0" : "SF-1";
         const sfPick = bracketPicks[sfKey];
-        if (sfPick && sfPick !== teamId) return true;
+        if (sfPick && sfPick !== bracketId) return true;
       }
-      // Check CHAMP: if team won SF but lost championship
+      // Check CHAMP
       const sf0 = bracketPicks["SF-0"];
       const sf1 = bracketPicks["SF-1"];
-      if (sf0 === teamId || sf1 === teamId) {
+      if (sf0 === bracketId || sf1 === bracketId) {
         const champPick = bracketPicks["CHAMP"];
-        if (champPick && champPick !== teamId) return true;
+        if (champPick && champPick !== bracketId) return true;
       }
       return false;
+    };
+
+    // Check if a draft item is eliminated (for 13-16 group: eliminated only when ALL 4 seeds are out)
+    const isTeamEliminated = (draftId) => {
+      if (!draftId) return false;
+      const region = draftId.split("-")[0];
+      if (draftId.endsWith("-13-16")) {
+        // Group: all 4 seeds must be eliminated
+        for (let s = 13; s <= 16; s++) {
+          if (!isBracketIdEliminated(seedToId(region, s))) return false;
+        }
+        return true;
+      }
+      return isBracketIdEliminated(draftId);
+    };
+
+    // Check if a specific seed within 13-16 is eliminated (for results page per-name strikethrough)
+    const isSeedEliminated = (region, seed) => {
+      return isBracketIdEliminated(seedToId(region, seed));
     };
 
     // Get the two teams competing in a matchup at a given key
@@ -715,7 +745,7 @@ export default function MarchMadnessAuction() {
       return [prevA || null, prevB || null];
     };
 
-    // Clickable team slot — displaySeed overrides the seed number shown (for 13-16 group)
+    // Clickable team slot — displaySeed overrides the seed number shown (for 13-16 group in R1)
     const ClickSlot = ({ teamId, pickKey, flip, isSelected, displaySeed }) => {
       const info = getTeamInfo(teamId);
       if (!teamId || !info) {
@@ -725,11 +755,14 @@ export default function MarchMadnessAuction() {
           </div>
         );
       }
-      const seedNum = displaySeed || info.seed;
-      // For seeds 13-16, show individual team name from seedNames if available
+      // Determine specific seed number: from displaySeed prop (R1) or embedded in bracketId (later rounds)
+      const embeddedSeed = toSeedNum(teamId);
+      const seedNum = displaySeed || embeddedSeed || info.seed;
+      // Show individual team name for 13-16 seeds
       let teamLabel = info.shortLabel;
-      if (displaySeed && displaySeed >= 13 && displaySeed <= 16 && info.seedNames && info.seedNames[displaySeed]) {
-        teamLabel = info.seedNames[displaySeed];
+      const specificSeed = displaySeed || embeddedSeed;
+      if (specificSeed && specificSeed >= 13 && specificSeed <= 16 && info.seedNames && info.seedNames[specificSeed]) {
+        teamLabel = info.seedNames[specificSeed];
       }
       const selected = isSelected;
       return (
@@ -1130,6 +1163,32 @@ export default function MarchMadnessAuction() {
                               const gi = d.items.indexOf(item);
                               const isEditing = editingPrice && editingPrice.drafterIdx === i && editingPrice.itemIdx === gi;
                               const wins = getTeamWins(item.id);
+                              const groupEliminated = isTeamEliminated(item.id);
+
+                              // For 13-16 group, render individual seed rows
+                              if (item.seed === "13-16") {
+                                return [13, 14, 15, 16].map((s) => {
+                                  const seedElim = isSeedEliminated(item.region, s);
+                                  const seedName = (item.seedNames && item.seedNames[s]) ? item.seedNames[s] : `#${s}`;
+                                  return (<div key={`${j}-${s}`} style={{ ...S.resultItem, opacity: seedElim ? 0.45 : 1, borderRadius: 5, padding: "3px 4px", marginLeft: -4, marginRight: -4 }}>
+                                    <span style={{ ...S.resultSeedBadge, backgroundColor: SEED_COLORS[s], textDecoration: seedElim ? "line-through" : "none" }}>{seedName}</span>
+                                    {s === 13 && <span style={{ ...S.resultWins, color: wins > 0 ? "#4ADE80" : "#3e4a5e" }}>{wins}W</span>}
+                                    {s === 13 && (isEditing ? (
+                                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                        <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 700 }}>$</span>
+                                        <input autoFocus style={S.editPriceInput} type="number" min={0} value={editPriceValue}
+                                          onChange={(e) => setEditPriceValue(e.target.value)}
+                                          onKeyDown={(e) => { if (e.key === "Enter") confirmEditPrice(); if (e.key === "Escape") cancelEditPrice(); }}
+                                          onBlur={confirmEditPrice} />
+                                      </div>
+                                    ) : (
+                                      <span style={{ ...S.resultPrice, cursor: isViewer ? "default" : "pointer", textDecoration: groupEliminated ? "line-through" : "none" }}
+                                        onClick={() => !isViewer && startEditPrice(i, gi, item.price)}>${item.price}</span>
+                                    ))}
+                                  </div>);
+                                });
+                              }
+
                               const eliminated = isTeamEliminated(item.id);
                               return (<div key={j} draggable={!isViewer} onDragStart={() => handleDragStart(i, gi, item)}
                                 style={{ ...S.resultItem, cursor: isViewer ? "default" : "grab", opacity: dragItem && dragItem.drafterIdx === i && dragItem.itemIdx === gi ? 0.3 : eliminated ? 0.45 : 1, borderRadius: 5, padding: "3px 4px", marginLeft: -4, marginRight: -4 }}>
@@ -1584,4 +1643,3 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
-

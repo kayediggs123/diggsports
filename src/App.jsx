@@ -1080,11 +1080,11 @@ export default function MarchMadnessAuction() {
                       <span style={S.statsCell}>${spent}</span>
                       {PAYOUT_ROUNDS.map((pr, i) => (
                         <span key={i} style={{ ...S.statsCell, width: 80, color: (p.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e" }}>
-                          ${(p.rounds[pr.name] || 0).toFixed(0)}
+                          ${(p.rounds[pr.name] || 0).toFixed(2)}
                         </span>
                       ))}
-                      <span style={{ ...S.statsCell, width: 85, color: "#E9C46A", fontWeight: 700 }}>${p.total.toFixed(0)}</span>
-                      <span style={{ ...S.statsCell, width: 80, color: profit >= 0 ? "#4ADE80" : "#E63946", fontWeight: 700 }}>{profit >= 0 ? "+" : ""}${profit.toFixed(0)}</span>
+                      <span style={{ ...S.statsCell, width: 85, color: "#E9C46A", fontWeight: 700 }}>${p.total.toFixed(2)}</span>
+                      <span style={{ ...S.statsCell, width: 80, color: profit >= 0 ? "#4ADE80" : "#E63946", fontWeight: 700 }}>{profit >= 0 ? "+" : ""}${profit.toFixed(2)}</span>
                     </div>
                     {isExpanded && (
                       <div style={{ background: `${d.color}06`, borderLeft: `3px solid ${d.color}`, paddingLeft: 8 }}>
@@ -1111,10 +1111,10 @@ export default function MarchMadnessAuction() {
                               <span style={S.statsCell}>${t.price}</span>
                               {PAYOUT_ROUNDS.map((pr, i) => (
                                 <span key={i} style={{ ...S.statsCell, width: 80, color: (t.rounds[pr.name] || 0) > 0 ? "#4ADE80" : "#3e4a5e", fontSize: 12 }}>
-                                  ${(t.rounds[pr.name] || 0).toFixed(0)}
+                                  ${(t.rounds[pr.name] || 0).toFixed(2)}
                                 </span>
                               ))}
-                              <span style={{ ...S.statsCell, width: 85, color: t.total > 0 ? "#E9C46A" : "#3e4a5e", fontWeight: 700 }}>${t.total.toFixed(0)}</span>
+                              <span style={{ ...S.statsCell, width: 85, color: t.total > 0 ? "#E9C46A" : "#3e4a5e", fontWeight: 700 }}>${t.total.toFixed(2)}</span>
                               <span style={{ ...S.statsCell, width: 80 }}></span>
                             </div>
                           );

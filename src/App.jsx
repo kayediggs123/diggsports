@@ -881,17 +881,18 @@ export default function MarchMadnessAuction() {
         const roundPool = totalPot * pr.pct;
         const winners = getRoundWinners(roundNum);
         if (winners.length === 0) return;
-        const perWinner = roundPool / winners.length;
+        const perWinner = roundPool / pr.winners; // Fixed per-win amount based on payout structure
         winners.forEach((teamId) => {
+          const draftId = toDraftId(teamId);
           const info = getTeamInfo(teamId);
           if (info && drafterPayouts[info.drafter]) {
             drafterPayouts[info.drafter].total += perWinner;
             if (!drafterPayouts[info.drafter].rounds[pr.name]) drafterPayouts[info.drafter].rounds[pr.name] = 0;
             drafterPayouts[info.drafter].rounds[pr.name] += perWinner;
           }
-          if (teamPayouts[teamId]) {
-            teamPayouts[teamId].total += perWinner;
-            teamPayouts[teamId].rounds[pr.name] = (teamPayouts[teamId].rounds[pr.name] || 0) + perWinner;
+          if (teamPayouts[draftId]) {
+            teamPayouts[draftId].total += perWinner;
+            teamPayouts[draftId].rounds[pr.name] = (teamPayouts[draftId].rounds[pr.name] || 0) + perWinner;
           }
         });
       });

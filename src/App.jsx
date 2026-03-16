@@ -244,7 +244,7 @@ export default function MarchMadnessAuction() {
     if (isHost && roomCode) writeRoom(roomCode, snap);
   };
 
-  const startDraft = () => {
+  const startDraft = (hostRoomCode) => {
     const names = drafterNames.filter((n) => n.trim());
     if (names.length < 2) return;
     const d = names.map((name, i) => ({ name, budget: hasBudget ? budgetAmount : Infinity, items: [], color: COLORS[i % COLORS.length] }));
@@ -256,16 +256,19 @@ export default function MarchMadnessAuction() {
     ];
     setDrafters(d); setAvailableItems(builtItems); setDraftOrder(shuffled); setDraftIndex(0);
     setCurrentItem(shuffled[0]); setPhase("draft"); setLog(initLog);
-    saveState({ phase: "draft", drafters: d, availableItems: builtItems, draftOrder: shuffled, draftIndex: 0, currentItem: shuffled[0], log: initLog, budgetMode, budgetAmount });
+    const snap = { phase: "draft", drafters: d, availableItems: builtItems, draftOrder: shuffled, draftIndex: 0, currentItem: shuffled[0], log: initLog, budgetMode, budgetAmount };
+    saveDraftLocal({ ...snap, bracketPicks });
+    if (hostRoomCode) writeRoom(hostRoomCode, { ...snap, bracketPicks });
   };
 
-  const startAsHost = async () => {
-    try {
-      await ensureAuth();
-      const code = generateRoomCode(); setRoomCode(code); setRole("host");
-    } catch (e) { console.error("Auth error:", e); }
+  const startAsHost = () => {
+    const code = generateRoomCode();
+    setRoomCode(code); setRole("host");
+    // Auth in background — writeRoom will call ensureAuth itself
+    ensureAuth().catch((e) => console.error("Auth error:", e));
+    startDraft(code);
   };
-  const startSolo = () => { setRole(null); };
+  const startSolo = () => { setRole(null); startDraft(); };
   const addDrafter = () => { if (drafterNames.length < 20) setDrafterNames([...drafterNames, ""]); };
   const removeDrafter = (idx) => { if (drafterNames.length > 2) setDrafterNames(drafterNames.filter((_, i) => i !== idx)); };
 
@@ -612,7 +615,7 @@ export default function MarchMadnessAuction() {
               <div className="mm-setup-cols" style={S.setupColumns}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
                   <button style={{ ...S.startBtn, width: "100%", opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                    onClick={() => { startSolo(); startDraft(); }} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
+                    onClick={startSolo} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START SOLO 🏀</button>
                   <p style={{ fontSize: 12, color: "#5a6478", textAlign: "center", lineHeight: 1.5 }}>
                     Run the draft on this device only. You control all bids and results locally. Data is saved to your browser — no internet connection needed.
                   </p>
@@ -628,7 +631,7 @@ export default function MarchMadnessAuction() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
                 <button style={{ ...S.startBtn, width: "100%", maxWidth: 360, opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                  onClick={startDraft} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START THE DRAFT 🏀</button>
+                  onClick={() => startDraft(roomCode)} disabled={drafterNames.filter((n) => n.trim()).length < 2}>START THE DRAFT 🏀</button>
                 <p style={{ fontSize: 12, color: "#5a6478", textAlign: "center", lineHeight: 1.5 }}>
                   Share the room code above with viewers before starting. They'll see every pick update in real-time.
                 </p>

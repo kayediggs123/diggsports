@@ -262,8 +262,8 @@ export default function MarchMadnessAuction() {
   const startAsHost = async () => {
     try {
       await ensureAuth();
-      const code = generateRoomCode(); setRoomCode(code); setRole("host");
-    } catch (e) { console.error("Auth error:", e); }
+    } catch (e) { console.error("Auth error (continuing anyway):", e); }
+    const code = generateRoomCode(); setRoomCode(code); setRole("host");
   };
   const startSolo = () => { setRole(null); };
   const addDrafter = () => { if (drafterNames.length < 20) setDrafterNames([...drafterNames, ""]); };
@@ -619,7 +619,7 @@ export default function MarchMadnessAuction() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
                   <button style={{ ...S.startBtnLive, width: "100%", opacity: drafterNames.filter((n) => n.trim()).length >= 2 ? 1 : 0.4 }}
-                    onClick={startAsHost} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
+                    onClick={async () => { await startAsHost(); startDraft(); }} disabled={drafterNames.filter((n) => n.trim()).length < 2}>HOST LIVE 📡</button>
                   <p style={{ fontSize: 12, color: "#5a6478", textAlign: "center", lineHeight: 1.5 }}>
                     Create a room code that others can join to watch the draft live in real-time. You run the auction — viewers see results update instantly on their own devices.
                   </p>

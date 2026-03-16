@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, off, get } from "firebase/database";
+import { getAuth, signInAnonymously } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCnLXyyMIPEjfBo8e0H2g1Z2K5FB8mKj6Q",
@@ -14,6 +15,14 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const auth = getAuth(app);
+
+// Authenticate anonymously before writing — returns the user UID
+const ensureAuth = async () => {
+  if (auth.currentUser) return auth.currentUser.uid;
+  const cred = await signInAnonymously(auth);
+  return cred.user.uid;
+};
 
 const REGIONS = ["East", "West", "South", "Midwest"];
 const REGION_COLORS = { East: "#3A86FF", West: "#E63946", South: "#2A9D8F", Midwest: "#F4A261" };
@@ -40,9 +49,32 @@ const PAYOUT_ROUNDS = [
   { name: "Champion", pct: 0.15, winners: 1 },
 ];
 
+const DEFAULT_TEAMS = {
+  // East
+  "East-1": "Duke", "East-2": "UConn", "East-3": "Michigan St", "East-4": "Kansas",
+  "East-5": "St. John's", "East-6": "Louisville", "East-7": "UCLA", "East-8": "Ohio State",
+  "East-9": "TCU", "East-10": "UCF", "East-11": "South Florida", "East-12": "Northern Iowa",
+  "East-13": "Cal Baptist", "East-14": "North Dakota St", "East-15": "Furman", "East-16": "Siena",
+  // West
+  "West-1": "Arizona", "West-2": "Purdue", "West-3": "Gonzaga", "West-4": "Arkansas",
+  "West-5": "Wisconsin", "West-6": "BYU", "West-7": "Miami FL", "West-8": "Villanova",
+  "West-9": "Utah State", "West-10": "Missouri", "West-11": "Texas/NC State", "West-12": "High Point",
+  "West-13": "Hawaii", "West-14": "Kennesaw St", "West-15": "Queens", "West-16": "LIU",
+  // Midwest
+  "Midwest-1": "Michigan", "Midwest-2": "Iowa State", "Midwest-3": "Virginia", "Midwest-4": "Alabama",
+  "Midwest-5": "Texas Tech", "Midwest-6": "Tennessee", "Midwest-7": "Kentucky", "Midwest-8": "Georgia",
+  "Midwest-9": "Saint Louis", "Midwest-10": "Santa Clara", "Midwest-11": "SMU/Miami OH", "Midwest-12": "Akron",
+  "Midwest-13": "Hofstra", "Midwest-14": "Wright State", "Midwest-15": "Tennessee St", "Midwest-16": "UMBC/Howard",
+  // South
+  "South-1": "Florida", "South-2": "Houston", "South-3": "Illinois", "South-4": "Nebraska",
+  "South-5": "Vanderbilt", "South-6": "North Carolina", "South-7": "Saint Mary's", "South-8": "Clemson",
+  "South-9": "Iowa", "South-10": "Texas A&M", "South-11": "VCU", "South-12": "McNeese",
+  "South-13": "Troy", "South-14": "Penn", "South-15": "Idaho", "South-16": "Prairie View/Lehigh",
+};
+
 const buildDefaultSeedNames = () => {
   const n = {};
-  REGIONS.forEach((r) => { for (let s = 1; s <= 16; s++) n[`${r}-${s}`] = ""; n[`${r}-13-16`] = ""; });
+  REGIONS.forEach((r) => { for (let s = 1; s <= 16; s++) n[`${r}-${s}`] = DEFAULT_TEAMS[`${r}-${s}`] || ""; n[`${r}-13-16`] = ""; });
   return n;
 };
 
@@ -82,7 +114,12 @@ const clearSaveLocal = () => { try { localStorage.removeItem(SAVE_KEY); } catch 
 const toArray = (val) => { if (Array.isArray(val)) return val; if (val && typeof val === "object") return Object.values(val); return []; };
 const serializeState = (state) => ({ ...state, drafters: (state.drafters || []).map((d) => ({ ...d, budget: d.budget === Infinity ? -1 : d.budget, items: d.items || [] })), availableItems: state.availableItems || [], draftOrder: state.draftOrder || [], log: state.log || [], bracketPicks: state.bracketPicks || {} });
 const deserializeState = (data) => { if (!data) return null; return { ...data, drafters: toArray(data.drafters).map((d) => ({ ...d, budget: d.budget === -1 ? Infinity : d.budget, items: toArray(d.items) })), log: toArray(data.log), availableItems: toArray(data.availableItems), draftOrder: toArray(data.draftOrder), currentItem: data.currentItem || null, bracketPicks: data.bracketPicks || {} }; };
-const writeRoom = async (roomCode, state) => { try { await set(ref(db, `rooms/${roomCode}`), serializeState(state)); } catch (e) { console.error("Firebase write:", e); } };
+const writeRoom = async (roomCode, state) => {
+  try {
+    const uid = await ensureAuth();
+    await set(ref(db, `rooms/${roomCode}`), { ...serializeState(state), hostUid: uid });
+  } catch (e) { console.error("Firebase write:", e); }
+};
 
 export default function MarchMadnessAuction() {
   // phase: "landing" | "config" | "draft" | "done"
@@ -222,7 +259,12 @@ export default function MarchMadnessAuction() {
     saveState({ phase: "draft", drafters: d, availableItems: builtItems, draftOrder: shuffled, draftIndex: 0, currentItem: shuffled[0], log: initLog, budgetMode, budgetAmount });
   };
 
-  const startAsHost = () => { const code = generateRoomCode(); setRoomCode(code); setRole("host"); };
+  const startAsHost = async () => {
+    try {
+      await ensureAuth();
+      const code = generateRoomCode(); setRoomCode(code); setRole("host");
+    } catch (e) { console.error("Auth error:", e); }
+  };
   const startSolo = () => { setRole(null); };
   const addDrafter = () => { if (drafterNames.length < 20) setDrafterNames([...drafterNames, ""]); };
   const removeDrafter = (idx) => { if (drafterNames.length > 2) setDrafterNames(drafterNames.filter((_, i) => i !== idx)); };
@@ -1644,3 +1686,4 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
+

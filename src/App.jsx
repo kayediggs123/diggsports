@@ -158,8 +158,8 @@ export default function MarchMadnessAuction() {
   const isHost = role === "host";
   const isLive = isHost || isViewer;
 
-  const setRoleAndRef = (r) => { setRoleAndRef(r); roleRef.current = r; };
-  const setRoomCodeAndRef = (c) => { setRoomCodeAndRef(c); roomCodeRef.current = c; };
+  const setRoleAndRef = (r) => { setRole(r); roleRef.current = r; };
+  const setRoomCodeAndRef = (c) => { setRoomCode(c); roomCodeRef.current = c; };
 
   const applyRemoteState = useCallback((data) => {
     try {
@@ -1683,3 +1683,4 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
+

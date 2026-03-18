@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, off, get } from "firebase/database";
-import { getAuth, signInAnonymously } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCnLXyyMIPEjfBo8e0H2g1Z2K5FB8mKj6Q",
@@ -15,14 +14,6 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const auth = getAuth(app);
-
-// Authenticate anonymously before writing — returns the user UID
-const ensureAuth = async () => {
-  if (auth.currentUser) return auth.currentUser.uid;
-  const cred = await signInAnonymously(auth);
-  return cred.user.uid;
-};
 
 const REGIONS = ["East", "West", "South", "Midwest"];
 const REGION_COLORS = { East: "#3A86FF", West: "#E63946", South: "#2A9D8F", Midwest: "#F4A261" };
@@ -115,10 +106,7 @@ const toArray = (val) => { if (Array.isArray(val)) return val; if (val && typeof
 const serializeState = (state) => ({ ...state, drafters: (state.drafters || []).map((d) => ({ ...d, budget: d.budget === Infinity ? -1 : d.budget, items: d.items || [] })), availableItems: state.availableItems || [], draftOrder: state.draftOrder || [], log: state.log || [], bracketPicks: state.bracketPicks || {} });
 const deserializeState = (data) => { if (!data) return null; return { ...data, drafters: toArray(data.drafters).map((d) => ({ ...d, budget: d.budget === -1 ? Infinity : d.budget, items: toArray(d.items) })), log: toArray(data.log), availableItems: toArray(data.availableItems), draftOrder: toArray(data.draftOrder), currentItem: data.currentItem || null, bracketPicks: data.bracketPicks || {} }; };
 const writeRoom = async (roomCode, state) => {
-  try {
-    const uid = await ensureAuth();
-    await set(ref(db, `rooms/${roomCode}`), { ...serializeState(state), hostUid: uid });
-  } catch (e) { console.error("Firebase write:", e); }
+  try { await set(ref(db, `rooms/${roomCode}`), serializeState(state)); } catch (e) { console.error("Firebase write:", e); }
 };
 
 export default function MarchMadnessAuction() {
@@ -264,8 +252,6 @@ export default function MarchMadnessAuction() {
   const startAsHost = () => {
     const code = generateRoomCode();
     setRoomCode(code); setRole("host");
-    // Auth in background — writeRoom will call ensureAuth itself
-    ensureAuth().catch((e) => console.error("Auth error:", e));
     startDraft(code);
   };
   const startSolo = () => { setRole(null); startDraft(); };
@@ -1689,3 +1675,4 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
+

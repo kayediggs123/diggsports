@@ -130,6 +130,8 @@ export default function MarchMadnessAuction() {
   const [copied, setCopied] = useState(false);
   const [role, setRole] = useState(null);
   const [roomCode, setRoomCode] = useState("");
+  const roleRef = useRef(null);
+  const roomCodeRef = useRef("");
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const [dragItem, setDragItem] = useState(null);
@@ -156,6 +158,9 @@ export default function MarchMadnessAuction() {
   const isHost = role === "host";
   const isLive = isHost || isViewer;
 
+  const setRoleAndRef = (r) => { setRoleAndRef(r); roleRef.current = r; };
+  const setRoomCodeAndRef = (c) => { setRoomCodeAndRef(c); roomCodeRef.current = c; };
+
   const applyRemoteState = useCallback((data) => {
     try {
       const state = deserializeState(data); if (!state) return;
@@ -181,11 +186,14 @@ export default function MarchMadnessAuction() {
     try {
       const snapshot = await get(ref(db, `rooms/${code}`));
       if (!snapshot.exists()) { setJoinError("Room not found."); return; }
-      setRoomCode(code); setRole("viewer"); applyRemoteState(snapshot.val()); subscribeToRoom(code);
+      setRoomCodeAndRef(code); setRoleAndRef("viewer"); applyRemoteState(snapshot.val()); subscribeToRoom(code);
     } catch (e) { setJoinError("Connection error."); }
   };
 
-  const saveState = (snap) => { saveDraftLocal({ ...snap, bracketPicks }); if (isHost && roomCode) writeRoom(roomCode, { ...snap, bracketPicks }); };
+  const saveState = (snap) => {
+    saveDraftLocal({ ...snap, bracketPicks });
+    if (roleRef.current === "host" && roomCodeRef.current) writeRoom(roomCodeRef.current, { ...snap, bracketPicks });
+  };
   const totalSpent = (d) => (d.items || []).reduce((s, i) => s + (i.price || 0), 0);
   const totalPot = drafters.reduce((s, d) => s + totalSpent(d), 0);
 
@@ -229,7 +237,7 @@ export default function MarchMadnessAuction() {
     setBracketPicks(newPicks);
     const snap = { phase, drafters, availableItems, draftOrder, draftIndex, currentItem, log, budgetMode, budgetAmount, bracketPicks: newPicks };
     saveDraftLocal(snap);
-    if (isHost && roomCode) writeRoom(roomCode, snap);
+    if (roleRef.current === "host" && roomCodeRef.current) writeRoom(roomCodeRef.current, snap);
   };
 
   const startDraft = (hostRoomCode) => {
@@ -251,10 +259,10 @@ export default function MarchMadnessAuction() {
 
   const startAsHost = () => {
     const code = generateRoomCode();
-    setRoomCode(code); setRole("host");
+    setRoomCodeAndRef(code); setRoleAndRef("host");
     startDraft(code);
   };
-  const startSolo = () => { setRole(null); startDraft(); };
+  const startSolo = () => { setRoleAndRef(null); startDraft(); };
   const addDrafter = () => { if (drafterNames.length < 20) setDrafterNames([...drafterNames, ""]); };
   const removeDrafter = (idx) => { if (drafterNames.length > 2) setDrafterNames(drafterNames.filter((_, i) => i !== idx)); };
 
@@ -422,7 +430,7 @@ export default function MarchMadnessAuction() {
     clearSaveLocal(); if (listenerRef.current) off(listenerRef.current);
     setPhase("landing"); setDrafters([]); setAvailableItems([]); setDraftOrder([]);
     setDraftIndex(0); setCurrentItem(null); setLog([]); setShowConfetti(false);
-    setHasSavedDraft(false); setRole(null); setRoomCode(""); setJoinCode("");
+    setHasSavedDraft(false); setRoleAndRef(null); setRoomCodeAndRef(""); setJoinCode("");
   };
 
   const Confetti = () => {
@@ -520,7 +528,7 @@ export default function MarchMadnessAuction() {
       <div style={S.page}><style>{globalCSS}</style>
         <div style={S.setupContainer}>
           <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <button style={S.backBtn} onClick={() => { setPhase("landing"); setRole(null); setRoomCode(""); }}>← Back</button>
+            <button style={S.backBtn} onClick={() => { setPhase("landing"); setRoleAndRef(null); setRoomCodeAndRef(""); }}>← Back</button>
             <h1 style={{ ...S.mainTitle, fontSize: 32 }}>DRAFT CONFIGURATION</h1>
             <p style={S.tagline}>Set up your drafters, teams, and settings</p>
           </div>
@@ -1675,4 +1683,3 @@ const S = {
   budgetBar: { height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" },
   budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
 };
-

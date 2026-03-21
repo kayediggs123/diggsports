@@ -1,26 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref as fbRef, set as fbSet, onValue as fbOnValue, off as fbOff, get as fbGet } from "firebase/database";
 
-let db = null;
-let fbRef, fbSet, fbOnValue, fbOff, fbGet;
-try {
-  const fbApp = await import("firebase/app");
-  const fbDb = await import("firebase/database");
-  const app = fbApp.initializeApp({
-    apiKey: "AIzaSyCnLXyyMIPEjfBo8e0H2g1Z2K5FB8mKj6Q",
-    authDomain: "diggsports.firebaseapp.com",
-    databaseURL: "https://diggsports-default-rtdb.firebaseio.com",
-    projectId: "diggsports",
-    storageBucket: "diggsports.firebasestorage.app",
-    messagingSenderId: "1081820686189",
-    appId: "1:1081820686189:web:669e7b0422ae07e80c1c64",
-    measurementId: "G-PMHER416F2",
-  });
-  db = fbDb.getDatabase(app);
-  fbRef = fbDb.ref; fbSet = fbDb.set; fbOnValue = fbDb.onValue; fbOff = fbDb.off; fbGet = fbDb.get;
-} catch (e) {
-  console.warn("Firebase not available, running in offline mode");
-  fbRef = () => null; fbSet = async () => {}; fbOnValue = () => {}; fbOff = () => {}; fbGet = async () => ({ exists: () => false, val: () => null });
-}
+const app = initializeApp({
+  apiKey: "AIzaSyCnLXyyMIPEjfBo8e0H2g1Z2K5FB8mKj6Q",
+  authDomain: "diggsports.firebaseapp.com",
+  databaseURL: "https://diggsports-default-rtdb.firebaseio.com",
+  projectId: "diggsports",
+  storageBucket: "diggsports.firebasestorage.app",
+  messagingSenderId: "1081820686189",
+  appId: "1:1081820686189:web:669e7b0422ae07e80c1c64",
+  measurementId: "G-PMHER416F2",
+});
+const db = getDatabase(app);
 
 const REGIONS = ["East", "West", "South", "Midwest"];
 const REGION_COLORS = { East: "#3A86FF", West: "#E63946", South: "#2A9D8F", Midwest: "#F4A261" };

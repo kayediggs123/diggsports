@@ -143,6 +143,7 @@ export default function MarchMadnessAuction() {
   // Keys: "{region}-R{round}-{matchIdx}" for regional rounds, "FF-0", "FF-1" for final four, "CHAMP" for champion
   const [bracketPicks, setBracketPicks] = useState({});
   const [expandedDrafter, setExpandedDrafter] = useState(null);
+  const bracketPicksRef = useRef({});
   const logRef = useRef(null);
   const listenerRef = useRef(null);
 
@@ -160,6 +161,7 @@ export default function MarchMadnessAuction() {
 
   const setRoleAndRef = (r) => { setRole(r); roleRef.current = r; };
   const setRoomCodeAndRef = (c) => { setRoomCode(c); roomCodeRef.current = c; };
+  const setBracketPicksAndRef = (p) => { setBracketPicks(p); bracketPicksRef.current = p; };
 
   const applyRemoteState = useCallback((data) => {
     try {
@@ -168,7 +170,7 @@ export default function MarchMadnessAuction() {
       setDraftOrder(state.draftOrder || []); setDraftIndex(state.draftIndex || 0);
       setCurrentItem(state.currentItem || null); setLog(state.log || []);
       setBudgetMode(state.budgetMode || "unlimited"); setBudgetAmount(state.budgetAmount || 200);
-      setBracketPicks(state.bracketPicks || {});
+      setBracketPicksAndRef(state.bracketPicks || {});
       setPhase(state.phase || "draft");
     } catch (e) { console.error("Error applying remote state:", e); }
   }, []);
@@ -191,8 +193,9 @@ export default function MarchMadnessAuction() {
   };
 
   const saveState = (snap) => {
-    saveDraftLocal({ ...snap, bracketPicks });
-    if (roleRef.current === "host" && roomCodeRef.current) writeRoom(roomCodeRef.current, { ...snap, bracketPicks });
+    const fullSnap = { ...snap, bracketPicks: snap.bracketPicks || bracketPicksRef.current };
+    saveDraftLocal(fullSnap);
+    if (roleRef.current === "host" && roomCodeRef.current) writeRoom(roomCodeRef.current, fullSnap);
   };
   const totalSpent = (d) => (d.items || []).reduce((s, i) => s + (i.price || 0), 0);
   const totalPot = drafters.reduce((s, d) => s + totalSpent(d), 0);
@@ -234,7 +237,7 @@ export default function MarchMadnessAuction() {
       clearDownstream(key, oldPick);
     }
 
-    setBracketPicks(newPicks);
+    setBracketPicksAndRef(newPicks);
     const snap = { phase, drafters, availableItems, draftOrder, draftIndex, currentItem, log, budgetMode, budgetAmount, bracketPicks: newPicks };
     saveDraftLocal(snap);
     if (roleRef.current === "host" && roomCodeRef.current) writeRoom(roomCodeRef.current, snap);
@@ -423,7 +426,7 @@ export default function MarchMadnessAuction() {
     setPhase(saved.phase); setDrafters(saved.drafters); setAvailableItems(saved.availableItems);
     setDraftOrder(saved.draftOrder); setDraftIndex(saved.draftIndex); setCurrentItem(saved.currentItem);
     setLog(saved.log); setBudgetMode(saved.budgetMode); setBudgetAmount(saved.budgetAmount);
-    setBracketPicks(saved.bracketPicks || {});
+    setBracketPicksAndRef(saved.bracketPicks || {});
   };
   const startFresh = () => { clearSaveLocal(); setHasSavedDraft(false); };
   const resetDraft = () => {
@@ -948,6 +951,8 @@ export default function MarchMadnessAuction() {
           {isLive && <span style={S.liveBadge}>{isHost ? `📡 ${roomCode}` : `👀 ${roomCode}`}</span>}
           <span style={{ ...S.headerBadge, background: "rgba(233,196,106,0.15)", color: "#E9C46A" }}>Pot: ${totalPot}</span>
           <div className="mm-header-actions" style={{ display: "flex", gap: 8 }}>
+            {isHost && <button style={{ ...S.copyBtn, background: "rgba(58,134,255,0.15)", color: "#3A86FF", borderColor: "rgba(58,134,255,0.3)" }}
+              onClick={() => { const snap = { phase, drafters, availableItems, draftOrder, draftIndex, currentItem, log, budgetMode, budgetAmount, bracketPicks }; writeRoom(roomCodeRef.current, snap); }}>📡 Sync</button>}
             <button style={S.copyBtn} onClick={copyResults}>{copied ? "✓ Copied!" : "📋 Copy"}</button>
             <button style={S.downloadBtn} onClick={downloadExcel}>📥 Excel</button>
             <button style={S.resetBtn} onClick={resetDraft}>🗑️ New Draft</button>

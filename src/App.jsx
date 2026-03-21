@@ -1,19 +1,26 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue, off, get } from "firebase/database";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCnLXyyMIPEjfBo8e0H2g1Z2K5FB8mKj6Q",
-  authDomain: "diggsports.firebaseapp.com",
-  databaseURL: "https://diggsports-default-rtdb.firebaseio.com",
-  projectId: "diggsports",
-  storageBucket: "diggsports.firebasestorage.app",
-  messagingSenderId: "1081820686189",
-  appId: "1:1081820686189:web:669e7b0422ae07e80c1c64",
-  measurementId: "G-PMHER416F2",
-};
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+let db = null;
+let fbRef, fbSet, fbOnValue, fbOff, fbGet;
+try {
+  const fbApp = await import("firebase/app");
+  const fbDb = await import("firebase/database");
+  const app = fbApp.initializeApp({
+    apiKey: "AIzaSyCnLXyyMIPEjfBo8e0H2g1Z2K5FB8mKj6Q",
+    authDomain: "diggsports.firebaseapp.com",
+    databaseURL: "https://diggsports-default-rtdb.firebaseio.com",
+    projectId: "diggsports",
+    storageBucket: "diggsports.firebasestorage.app",
+    messagingSenderId: "1081820686189",
+    appId: "1:1081820686189:web:669e7b0422ae07e80c1c64",
+    measurementId: "G-PMHER416F2",
+  });
+  db = fbDb.getDatabase(app);
+  fbRef = fbDb.ref; fbSet = fbDb.set; fbOnValue = fbDb.onValue; fbOff = fbDb.off; fbGet = fbDb.get;
+} catch (e) {
+  console.warn("Firebase not available, running in offline mode");
+  fbRef = () => null; fbSet = async () => {}; fbOnValue = () => {}; fbOff = () => {}; fbGet = async () => ({ exists: () => false, val: () => null });
+}
 
 const REGIONS = ["East", "West", "South", "Midwest"];
 const REGION_COLORS = { East: "#3A86FF", West: "#E63946", South: "#2A9D8F", Midwest: "#F4A261" };
@@ -106,7 +113,7 @@ const toArray = (val) => { if (Array.isArray(val)) return val; if (val && typeof
 const serializeState = (state) => ({ ...state, drafters: (state.drafters || []).map((d) => ({ ...d, budget: d.budget === Infinity ? -1 : d.budget, items: d.items || [] })), availableItems: state.availableItems || [], draftOrder: state.draftOrder || [], log: state.log || [], bracketPicks: state.bracketPicks || {} });
 const deserializeState = (data) => { if (!data) return null; return { ...data, drafters: toArray(data.drafters).map((d) => ({ ...d, budget: d.budget === -1 ? Infinity : d.budget, items: toArray(d.items) })), log: toArray(data.log), availableItems: toArray(data.availableItems), draftOrder: toArray(data.draftOrder), currentItem: data.currentItem || null, bracketPicks: data.bracketPicks || {} }; };
 const writeRoom = async (roomCode, state) => {
-  try { await set(ref(db, `rooms/${roomCode}`), serializeState(state)); } catch (e) { console.error("Firebase write:", e); }
+  try { await fbSet(fbRef(db, `rooms/${roomCode}`), serializeState(state)); } catch (e) { console.error("Firebase write:", e); }
 };
 
 export default function MarchMadnessAuction() {
@@ -148,9 +155,12 @@ export default function MarchMadnessAuction() {
   const listenerRef = useRef(null);
 
   useEffect(() => {
-    const saved = loadDraftLocal();
-    if (saved && (saved.phase === "draft" || saved.phase === "done")) setHasSavedDraft(true);
-    return () => { if (listenerRef.current) off(listenerRef.current); };
+    try {
+      const saved = loadDraftLocal();
+      if (saved && saved.drafters && (saved.phase === "draft" || saved.phase === "done")) setHasSavedDraft(true);
+      else if (saved && !saved.drafters) { clearSaveLocal(); }
+    } catch (e) { clearSaveLocal(); }
+    return () => { if (listenerRef.current) fbOff(listenerRef.current); };
   }, []);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
@@ -176,9 +186,9 @@ export default function MarchMadnessAuction() {
   }, []);
 
   const subscribeToRoom = useCallback((code) => {
-    if (listenerRef.current) off(listenerRef.current);
-    const roomRef = ref(db, `rooms/${code}`); listenerRef.current = roomRef;
-    onValue(roomRef, (snapshot) => { const data = snapshot.val(); if (data) applyRemoteState(data); });
+    if (listenerRef.current) fbOff(listenerRef.current);
+    const roomRef = fbRef(db, `rooms/${code}`); listenerRef.current = roomRef;
+    fbOnValue(roomRef, (snapshot) => { const data = snapshot.val(); if (data) applyRemoteState(data); });
   }, [applyRemoteState]);
 
   const joinRoom = async () => {
@@ -186,7 +196,7 @@ export default function MarchMadnessAuction() {
     if (code.length < 4) { setJoinError("Enter a valid room code"); return; }
     setJoinError("");
     try {
-      const snapshot = await get(ref(db, `rooms/${code}`));
+      const snapshot = await fbGet(fbRef(db, `rooms/${code}`));
       if (!snapshot.exists()) { setJoinError("Room not found."); return; }
       setRoomCodeAndRef(code); setRoleAndRef("viewer"); applyRemoteState(snapshot.val()); subscribeToRoom(code);
     } catch (e) { setJoinError("Connection error."); }
@@ -202,7 +212,6 @@ export default function MarchMadnessAuction() {
 
   // Pick a winner in the bracket and cascade (clear downstream picks if changed)
   const pickBracketWinner = (key, teamId) => {
-    if (isViewer) return;
     const newPicks = { ...bracketPicks };
     const oldPick = newPicks[key];
     newPicks[key] = teamId;
@@ -240,7 +249,7 @@ export default function MarchMadnessAuction() {
     setBracketPicksAndRef(newPicks);
     const snap = { phase, drafters, availableItems, draftOrder, draftIndex, currentItem, log, budgetMode, budgetAmount, bracketPicks: newPicks };
     saveDraftLocal(snap);
-    if (roleRef.current === "host" && roomCodeRef.current) writeRoom(roomCodeRef.current, snap);
+    if (roomCodeRef.current) writeRoom(roomCodeRef.current, snap);
   };
 
   const startDraft = (hostRoomCode) => {
@@ -422,15 +431,17 @@ export default function MarchMadnessAuction() {
 
   // ── Resume / Reset ──
   const resumeDraft = () => {
-    const saved = loadDraftLocal(); if (!saved) return;
-    setPhase(saved.phase); setDrafters(saved.drafters); setAvailableItems(saved.availableItems);
-    setDraftOrder(saved.draftOrder); setDraftIndex(saved.draftIndex); setCurrentItem(saved.currentItem);
-    setLog(saved.log); setBudgetMode(saved.budgetMode); setBudgetAmount(saved.budgetAmount);
-    setBracketPicksAndRef(saved.bracketPicks || {});
+    try {
+      const saved = loadDraftLocal(); if (!saved || !saved.drafters) { clearSaveLocal(); setHasSavedDraft(false); return; }
+      setPhase(saved.phase); setDrafters(saved.drafters); setAvailableItems(saved.availableItems || []);
+      setDraftOrder(saved.draftOrder || []); setDraftIndex(saved.draftIndex || 0); setCurrentItem(saved.currentItem || null);
+      setLog(saved.log || []); setBudgetMode(saved.budgetMode || "unlimited"); setBudgetAmount(saved.budgetAmount || 200);
+      setBracketPicksAndRef(saved.bracketPicks || {});
+    } catch (e) { console.error("Failed to resume draft:", e); clearSaveLocal(); setHasSavedDraft(false); }
   };
   const startFresh = () => { clearSaveLocal(); setHasSavedDraft(false); };
   const resetDraft = () => {
-    clearSaveLocal(); if (listenerRef.current) off(listenerRef.current);
+    clearSaveLocal(); if (listenerRef.current) fbOff(listenerRef.current);
     setPhase("landing"); setDrafters([]); setAvailableItems([]); setDraftOrder([]);
     setDraftIndex(0); setCurrentItem(null); setLog([]); setShowConfetti(false);
     setHasSavedDraft(false); setRoleAndRef(null); setRoomCodeAndRef(""); setJoinCode("");
@@ -809,14 +820,14 @@ export default function MarchMadnessAuction() {
       const selected = isSelected;
       return (
         <div
-          onClick={() => pickKey && !isViewer && pickBracketWinner(pickKey, teamId)}
+          onClick={() => pickKey && pickBracketWinner(pickKey, teamId)}
           style={{
             ...S.bSlot,
             borderLeftColor: !flip ? (info.drafterColor || "rgba(255,255,255,0.08)") : "transparent",
             borderRightColor: flip ? (info.drafterColor || "rgba(255,255,255,0.08)") : "transparent",
             flexDirection: flip ? "row-reverse" : "row",
             textAlign: flip ? "right" : "left",
-            cursor: pickKey && !isViewer ? "pointer" : "default",
+            cursor: pickKey ? "pointer" : "default",
             background: selected ? `${info.drafterColor}18` : "rgba(255,255,255,0.02)",
             outline: selected ? `1px solid ${info.drafterColor}50` : "none",
           }}>

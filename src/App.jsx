@@ -185,7 +185,7 @@ export default function MarchMadnessAuction() {
 
   const joinRoom = async () => {
     const code = joinCode.trim().toUpperCase();
-    if (code.length < 4) { setJoinError("Enter a valid room code"); return; }
+    if (!/^[A-Z0-9]{4,8}$/.test(code)) { setJoinError("Enter a valid room code"); return; }
     setJoinError("");
     try {
       const snapshot = await fbGet(fbRef(db, `rooms/${code}`));
@@ -223,8 +223,8 @@ export default function MarchMadnessAuction() {
               clearDownstream(nextKey, victim);
             }
           } else if (round === 4) {
-            // Elite 8 winner goes to SF-0 (East/Midwest) or SF-1 (South/West)
-            const sfKey = (reg === "East" || reg === "Midwest") ? "SF-0" : "SF-1";
+            // Elite 8 winner goes to SF-0 (East/South) or SF-1 (Midwest/West)
+            const sfKey = (reg === "East" || reg === "South") ? "SF-0" : "SF-1";
             if (newPicks[sfKey] === victim) {
               newPicks[sfKey] = undefined;
               clearDownstream(sfKey, victim);
@@ -743,7 +743,7 @@ export default function MarchMadnessAuction() {
       // Check SF
       const e8Winner = bracketPicks[`${region}-R4-0`];
       if (e8Winner === bracketId) {
-        const sfKey = (region === "East" || region === "Midwest") ? "SF-0" : "SF-1";
+        const sfKey = (region === "East" || region === "South") ? "SF-0" : "SF-1";
         const sfPick = bracketPicks[sfKey];
         if (sfPick && sfPick !== bracketId) return true;
       }
@@ -977,14 +977,14 @@ export default function MarchMadnessAuction() {
             <p style={{ fontSize: 12, color: "#5a6478", marginBottom: 12, textAlign: "center" }}>Click a team to advance them through the bracket</p>
             <div className="mm-bracket-wrap" style={{ minWidth: 1100, display: "flex", flexDirection: "column", gap: 0 }}>
 
-              {/* Top: East → FF → Midwest */}
+              {/* Top: East → FF → Midwest (semifinal pulls East + South) */}
               <div style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
                 <RegionBracket region="East" flip={false} />
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 130, alignItems: "center", gap: 4, padding: "0 6px" }}>
                   <div style={S.bFinalLabel}>FINAL FOUR</div>
                   {(() => {
                     const tA = bracketPicks["East-R4-0"];
-                    const tB = bracketPicks["Midwest-R4-0"];
+                    const tB = bracketPicks["South-R4-0"];
                     const pickKey = "SF-0";
                     const picked = bracketPicks[pickKey];
                     return (
@@ -1021,13 +1021,13 @@ export default function MarchMadnessAuction() {
                 </div>
               </div>
 
-              {/* Bottom: South → FF → West */}
+              {/* Bottom: South → FF → West (semifinal pulls Midwest + West) */}
               <div style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
                 <RegionBracket region="South" flip={false} />
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 130, alignItems: "center", gap: 4, padding: "0 6px" }}>
                   <div style={S.bFinalLabel}>FINAL FOUR</div>
                   {(() => {
-                    const tA = bracketPicks["South-R4-0"];
+                    const tA = bracketPicks["Midwest-R4-0"];
                     const tB = bracketPicks["West-R4-0"];
                     const pickKey = "SF-1";
                     const picked = bracketPicks[pickKey];
